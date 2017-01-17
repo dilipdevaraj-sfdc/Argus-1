@@ -37,6 +37,7 @@ import com.salesforce.dva.argus.service.alert.notifier.AuditNotifier;
 import com.salesforce.dva.argus.service.alert.notifier.EmailNotifier;
 import com.salesforce.dva.argus.service.alert.notifier.GOCNotifier;
 import com.salesforce.dva.argus.service.alert.notifier.GusNotifier;
+import com.salesforce.dva.argus.service.alert.notifier.SlackNotifier;
 import com.salesforce.dva.argus.service.warden.WardenApiNotifier;
 import com.salesforce.dva.argus.service.warden.WardenPostingNotifier;
 
@@ -61,7 +62,8 @@ public final class NotifierFactory {
     private Provider<WardenPostingNotifier> _wardenPostingNotifierProvider;
     @Inject
     private Provider<GusNotifier> _gusNotifierProvider;
-    
+    @Inject
+    private Provider<SlackNotifier> _slackNotifierProvider;
     
     /**
      * Returns an instance of the Email Notifier.
@@ -115,6 +117,15 @@ public final class NotifierFactory {
      */
     public synchronized GusNotifier getGusNotifier() {
         return _gusNotifierProvider.get();
+    }
+    
+    /**
+     * Returns an instance of the Slack Notifier.
+     *
+     * @return  An instance of the Slack Notifier.
+     */
+    public synchronized SlackNotifier getSlackNotifier() {
+        return _slackNotifierProvider.get();
     }
 }
 /* Copyright (c) 2016, Salesforce.com, Inc.  All rights reserved. */

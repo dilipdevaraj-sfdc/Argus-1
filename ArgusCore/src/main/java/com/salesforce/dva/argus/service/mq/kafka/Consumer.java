@@ -112,7 +112,7 @@ public class Consumer {
                         _configuration.getValue(Property.ZOOKEEPER_CONNECT.getName(), Property.ZOOKEEPER_CONNECT.getDefaultValue()));
                     props.setProperty("group.id",
                         _configuration.getValue(Property.KAFKA_CONSUMER_GROUPID.getName(), Property.KAFKA_CONSUMER_GROUPID.getDefaultValue()));
-                    props.setProperty("auto.offset.reset", "smallest");
+                    props.setProperty("auto.offset.reset", "largest");
                     props.setProperty("auto.commit.interval.ms", "60000");
                     props.setProperty("fetch.message.max.bytes", "2000000");
 

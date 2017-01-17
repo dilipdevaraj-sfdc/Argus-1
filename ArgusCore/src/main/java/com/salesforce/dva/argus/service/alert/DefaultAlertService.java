@@ -724,6 +724,8 @@ public class DefaultAlertService extends DefaultJPAService implements AlertServi
 			return _notifierFactory.getWardenPostingNotifier();
 		case GUS:
 			return _notifierFactory.getGusNotifier();
+		case SLACK:
+			return _notifierFactory.getSlackNotifier();			
 		default:
 			return _notifierFactory.getDBNotifier();
 		}
