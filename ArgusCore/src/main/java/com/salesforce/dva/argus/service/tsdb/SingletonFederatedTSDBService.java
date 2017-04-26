@@ -37,9 +37,9 @@ import com.salesforce.dva.argus.service.MonitorService;
 import com.salesforce.dva.argus.system.SystemConfiguration;
 
 /**
- * A Singleton implementation of the TSDBService.
+ * A Singleton implementation of the FederatedTSDBService.
  *
- * @author  Bhinav Sura (bhinav.sura@salesforce.com)
+ * @author  Dilip Devaraj (ddevaraj@salesforce.com)
  */
 @Singleton
 public class SingletonFederatedTSDBService extends FederatedTSDBService {

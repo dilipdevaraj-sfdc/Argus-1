@@ -73,7 +73,7 @@ import static com.salesforce.dva.argus.system.SystemAssert.*;
 /**
  * The federated implementation of the TSDBService.
  *
- * @author  Tom Valine (tvaline@salesforce.com), Bhinav Sura (bhinav.sura@salesforce.com)
+ * @author  Dilip Devaraj (ddevaraj@salesforce.com)
  */
 public class FederatedTSDBService extends DefaultService implements TSDBService {
 
@@ -89,7 +89,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 
 	private final ObjectMapper _mapper;
 	protected Logger _logger = LoggerFactory.getLogger(getClass());
-	private Map<String, CloseableHttpClient> _readPortMap;
+	private Map<String, CloseableHttpClient> _readPortMap = new HashMap<>();
 	private CloseableHttpClient _writePort;
 	private final String _writeEndpoint;
 	private final List<String> _readEndPoints = new ArrayList<>();
@@ -116,8 +116,6 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		_monitorService = monitorService;
 
 		_mapper = getMapper();
-		//     int endPointCount = Integer.parseInt(_configuration.getValue(Property.TSD_ENDPOINT_COUNT.getName(),
-		//             Property.TSD_ENDPOINT_COUNT.getDefaultValue()));        
 		int connCount = Integer.parseInt(_configuration.getValue(Property.TSD_CONNECTION_COUNT.getName(),
 				Property.TSD_CONNECTION_COUNT.getDefaultValue()));
 		int connTimeout = Integer.parseInt(_configuration.getValue(Property.TSD_ENDPOINT_CONNECTION_TIMEOUT.getName(),
@@ -134,7 +132,6 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		requireArgument((_writeEndpoint != null) && (!_writeEndpoint.isEmpty()), "Illegal write endpoint URL.");
 		requireArgument(connCount >= 2, "At least two connections are required.");
 		requireArgument(connTimeout >= 1, "Timeout must be greater than 0.");
-		_readPortMap = new HashMap<>();
 		try {
 			for(String readEndpoint: _readEndPoints){
 				_readPortMap.put(readEndpoint, getClient(readEndpoint, connCount / 2, connTimeout, socketTimeout));
