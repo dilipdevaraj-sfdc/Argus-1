@@ -296,7 +296,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		// MultiValueMap metricsMap = new MultiValueMap();
 
 		// Map<MetricQuery, Future<List<Metric>>> futures = new HashMap<>();
-		
+
 		Map<MetricQuery, List<Metric>> metricsMap = new HashMap<>();
 		Map<MetricQuery, List<Future<List<Metric>>>> futuresMap = new HashMap<>();
 		// MultiValuedMap<MetricQuery, Future<List<Metric>>> futuresMap = new MultiValuedMap();
@@ -322,41 +322,45 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 
 		Map<String, Metric> metricMergeMap = new HashMap<>();
 		for (Entry<MetricQuery, List<Future<List<Metric>>>> entry : futuresMap.entrySet()) {
-			try {
-				List<Future<List<Metric>>> futures = entry.getValue();
-				List<Metric> metrics = new ArrayList<>();
-				String metricIdentifier;
 
-				for( Future<List<Metric>> future : futures){
-					List<Metric> m  = future.get();
+			List<Future<List<Metric>>> futures = entry.getValue();
+			List<Metric> metrics = new ArrayList<>();
+			String metricIdentifier;
 
-					if (m != null) {
-						for (Metric metric : m) {
-							if (metric != null) {
-								metricIdentifier = metric.getIdentifier();
-								Metric finalMetric = metricMergeMap.get(metricIdentifier);
-								if(finalMetric == null){
-									metric.setQuery(entry.getKey());
-									metricMergeMap.put(metricIdentifier, metric);
-								} else {
-									finalMetric.addDatapoints(metric.getDatapoints());
-								}
+			for( Future<List<Metric>> future : futures){
+
+				List<Metric> m;
+				try{					
+					m = future.get();
+				}
+				catch (InterruptedException | ExecutionException e) {
+					_logger.warn("Failed to get metrics from TSDB. Reason: " + e.getMessage());
+					continue;
+				}
+
+				if (m != null) {
+					for (Metric metric : m) {
+						if (metric != null) {
+							metricIdentifier = metric.getIdentifier();
+							Metric finalMetric = metricMergeMap.get(metricIdentifier);
+							if(finalMetric == null){
+								metric.setQuery(entry.getKey());
+								metricMergeMap.put(metricIdentifier, metric);
+							} else {
+								finalMetric.addDatapoints(metric.getDatapoints());
 							}
 						}
 					}
-
 				}
 
-				for(Metric finalMetric: metricMergeMap.values()){
-					metrics.add(finalMetric);
-				}
-
-				instrumentQueryLatency(_monitorService, entry.getKey(), queryStartExecutionTime.get(entry.getKey()), "metrics");
-				metricsMap.put(entry.getKey(), metrics);
-			} catch (InterruptedException | ExecutionException e) {
-				_logger.warn("Failed to get metrics from TSDB. Reason: " + e.getMessage());
-				throw new SystemException("Failed to get metrics from TSDB. Reason: " + e.getMessage());
 			}
+
+			for(Metric finalMetric: metricMergeMap.values()){
+				metrics.add(finalMetric);
+			}
+
+			instrumentQueryLatency(_monitorService, entry.getKey(), queryStartExecutionTime.get(entry.getKey()), "metrics");
+			metricsMap.put(entry.getKey(), metrics);
 		}
 		_logger.debug("Time to get Metrics = " + (System.currentTimeMillis() - start));
 		return metricsMap;
