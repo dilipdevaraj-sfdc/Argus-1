@@ -169,7 +169,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	//~ Methods **************************************************************************************************************************************
 
 	/* Generates the metric names for metrics used for annotations. */
-	static String toAnnotationKey(String scope, String metric, String type, Map<String, String> tags) {
+	private static String toAnnotationKey(String scope, String metric, String type, Map<String, String> tags) {
 		int hash = 7;
 
 		hash = 71 * hash + (scope != null ? scope.hashCode() : 0);
