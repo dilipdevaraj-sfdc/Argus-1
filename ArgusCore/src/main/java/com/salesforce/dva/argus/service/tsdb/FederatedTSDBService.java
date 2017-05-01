@@ -40,7 +40,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.text.MessageFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -396,27 +395,35 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		requireArgument(queries != null, "Annotation queries cannot be null.");
 
 		List<Annotation> annotations = new ArrayList<>();
-		String pattern = _readEndPoints.get(0) + "/api/query?{0}";
 
 		for (AnnotationQuery query : queries) {
 			long start = System.currentTimeMillis();
-			String requestUrl = MessageFormat.format(pattern, query.toString());
-			HttpResponse response = executeHttpRequest(HttpMethod.GET, requestUrl, _readEndPoints.get(0), null);
-			List<AnnotationWrapper> wrappers = toEntity(extractResponse(response), new TypeReference<AnnotationWrappers>() { });
-			if (wrappers != null) {
-				for (AnnotationWrapper wrapper : wrappers) {
-					for (Annotation existing : wrapper.getAnnotations()) {
-						String source = existing.getSource();
-						String id = existing.getId();
-						String type = query.getType();
-						String scope = query.getScope();
-						String metric = query.getMetric();
-						Long timestamp = existing.getTimestamp();
-						Annotation updated = new Annotation(source, id, type, scope, metric, timestamp);
+			for(String readEndPoint: _readEndPoints){
+				String pattern = readEndPoint + "/api/query?{0}";
+				String requestUrl = MessageFormat.format(pattern, query.toString());
+				List<AnnotationWrapper> wrappers;
+				try{
+					HttpResponse response = executeHttpRequest(HttpMethod.GET, requestUrl, _readEndPoints.get(0), null);
+					wrappers = toEntity(extractResponse(response), new TypeReference<AnnotationWrappers>() { });
+				} catch (Exception ex){
+					_logger.warn("Failed to get annotations from TSDB. Reason: " + ex.getMessage());
+					continue;
+				}
+				if (wrappers != null) {
+					for (AnnotationWrapper wrapper : wrappers) {
+						for (Annotation existing : wrapper.getAnnotations()) {
+							String source = existing.getSource();
+							String id = existing.getId();
+							String type = query.getType();
+							String scope = query.getScope();
+							String metric = query.getMetric();
+							Long timestamp = existing.getTimestamp();
+							Annotation updated = new Annotation(source, id, type, scope, metric, timestamp);
 
-						updated.setFields(existing.getFields());
-						updated.setTags(query.getTags());
-						annotations.add(updated);
+							updated.setFields(existing.getFields());
+							updated.setTags(query.getTags());
+							annotations.add(updated);
+						}
 					}
 				}
 			}
