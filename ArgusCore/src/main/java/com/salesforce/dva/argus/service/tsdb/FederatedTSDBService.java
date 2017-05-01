@@ -31,44 +31,68 @@
 
 package com.salesforce.dva.argus.service.tsdb;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.google.inject.Inject;
-import com.google.inject.Singleton;
-import com.salesforce.dva.argus.entity.*;
-import com.salesforce.dva.argus.service.*;
-import com.salesforce.dva.argus.system.*;
+import static com.salesforce.dva.argus.system.SystemAssert.requireArgument;
 
-import org.apache.commons.collections.map.MultiValueMap;
-import org.apache.http.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpHost;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpStatus;
+import org.apache.http.MethodNotSupportedException;
 import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.*;
+import org.apache.http.client.methods.HttpDelete;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPut;
 import org.apache.http.conn.routing.HttpRoute;
 import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.*;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
-import java.net.*;
-import java.text.MessageFormat;
-import java.util.*;
-import java.util.Map.Entry;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.Future;
-import java.util.concurrent.RecursiveTask;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
-import static com.salesforce.dva.argus.system.SystemAssert.*;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
+import com.google.inject.Inject;
+import com.salesforce.dva.argus.entity.Annotation;
+import com.salesforce.dva.argus.entity.Metric;
+import com.salesforce.dva.argus.service.DefaultService;
+import com.salesforce.dva.argus.service.MonitorService;
+import com.salesforce.dva.argus.service.TSDBService;
+import com.salesforce.dva.argus.service.tsdb.DefaultTSDBService.AnnotationWrapper;
+import com.salesforce.dva.argus.service.tsdb.DefaultTSDBService.AnnotationWrappers;
+import com.salesforce.dva.argus.system.SystemConfiguration;
+import com.salesforce.dva.argus.system.SystemException;
 
 /**
  * The federated implementation of the TSDBService.
@@ -290,23 +314,11 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		long start = System.currentTimeMillis();
 
 
-		// Map<MetricQuery, List<Metric>> metricsMap = new HashMap<>();
-		//MultiMap metricsMap = new MultiHashMap();
-
-		// MultiValueMap metricsMap = new MultiValueMap();
-
-		// Map<MetricQuery, Future<List<Metric>>> futures = new HashMap<>();
-
 		Map<MetricQuery, List<Metric>> metricsMap = new HashMap<>();
 		Map<MetricQuery, List<Future<List<Metric>>>> futuresMap = new HashMap<>();
-		// MultiValuedMap<MetricQuery, Future<List<Metric>>> futuresMap = new MultiValuedMap();
 		Map<MetricQuery, Long> queryStartExecutionTime = new HashMap<>();
 
-		/* Get list of Read TSDB endpoints from Zookeeper */
-		// MyRecursiveTask myRecursiveTask = new MyRecursiveTask(_readPorts.size(), queries);
-		// ForkJoinPool pool = new ForkJoinPool();
-		// long mergedResult = pool.invoke(myRecursiveTask);
-
+		/* TODO: Get list of Read TSDB endpoints from Zookeeper */
 		for (MetricQuery query : queries) {
 			String requestBody = fromEntity(query);
 			List<Future<List<Metric>>> futures = new ArrayList<>();
@@ -419,6 +431,9 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 
 		module.addSerializer(Metric.class, new MetricTransform.Serializer());
 		module.addDeserializer(ResultSet.class, new MetricTransform.MetricListDeserializer());
+		module.addSerializer(AnnotationWrapper.class, new AnnotationTransform.Serializer());
+		module.addSerializer(AnnotationWrapper.class, new AnnotationTransform.Serializer());
+		module.addDeserializer(AnnotationWrappers.class, new AnnotationTransform.Deserializer());		
 		module.addSerializer(MetricQuery.class, new MetricQueryTransform.Serializer());
 		mapper.registerModule(module);
 		return mapper;
@@ -742,193 +757,6 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		/** PUT operation. */
 		PUT;
 	}
-
-	//~ Inner Classes ********************************************************************************************************************************
-
-	/**
-	 * Helper entity to wrap multiple Annotation entities into a form closer to the TSDB metric form.
-	 *
-	 * @author  Tom Valine (tvaline@salesforce.com), Bhinav Sura (bhinav.sura@salesforce.com)
-	 */
-	static class AnnotationWrapper {
-
-		String _uid;
-		Long _timestamp;
-		Map<String, Annotation> _custom;
-		private TSDBService _service;
-
-		/** Creates a new AnnotationWrapper object. */
-		AnnotationWrapper() {
-			_custom = new HashMap<>();
-		}
-
-		/* Annotations should have the same scope, metric, type and tags and timestamp. */
-		private AnnotationWrapper(Set<Annotation> annotations, TSDBService service) {
-			this();
-			_service = service;
-			for (Annotation annotation : annotations) {
-				if (_uid == null) {
-					_uid = getUid(annotation);
-					_timestamp = annotation.getTimestamp();
-				}
-				_custom.put(annotation.getSource() + "." + annotation.getId(), annotation);
-			}
-		}
-
-		List<Annotation> getAnnotations() {
-			return new ArrayList<>(_custom.values());
-		}
-
-		private String getUid(Annotation annotation) {
-			String scope = toAnnotationKey(annotation);
-			String type = annotation.getType();
-			Map<String, String> tags = annotation.getTags();
-			MetricQuery query = new MetricQuery(scope, type, tags, 0L, 2L);
-			long backOff = 1000L;
-
-			for (int attempts = 0; attempts < 3; attempts++) {
-				try {
-					return _service.getMetrics(Arrays.asList(query)).get(query).get(0).getUid();
-				} catch (Exception e) {
-					Metric metric = new Metric(scope, type);
-					Map<Long, Double> datapoints = new HashMap<>();
-
-					datapoints.put(1L, 0.0);
-					metric.setDatapoints(datapoints);
-					metric.setTags(annotation.getTags());
-					_service.putMetrics(Arrays.asList(new Metric[] { metric }));
-					try {
-						Thread.sleep(backOff);
-					} catch (InterruptedException ex) {
-						break;
-					}
-					backOff += 1000L;
-				}
-			}
-			throw new SystemException("Failed to create new annotation metric.");
-		}
-
-		String getUid() {
-			return _uid;
-		}
-
-		Long getTimestamp() {
-			return _timestamp;
-		}
-
-		Map<String, Annotation> getCustom() {
-			return Collections.unmodifiableMap(_custom);
-		}
-
-		void setUid(String uid) {
-			_uid = uid;
-		}
-
-		void setTimestamp(Long timestamp) {
-			_timestamp = timestamp;
-		}
-
-		void setCustom(Map<String, Annotation> custom) {
-			_custom = custom;
-		}
-	}
-
-	/**
-	 * Helper entity to facilitate de-serialization.
-	 *
-	 * @author  Tom Valine (tvaline@salesforce.com), Bhinav Sura (bhinav.sura@salesforce.com)
-	 */
-	static class AnnotationWrappers extends ArrayList<AnnotationWrapper> {
-
-		/** Comment for <code>serialVersionUID.</code> */
-		private static final long serialVersionUID = 1L;
-	}
-
-
-	/*
-	public class MyRecursiveTask extends RecursiveTask{
-
-		private int numReadEndponts = 0;
-		private List<MetricQuery> queries;
-
-		public MyRecursiveTask(int numReadEndponts, List<MetricQuery> queries) {
-			this.numReadEndponts = numReadEndponts;
-			this.queries = queries;
-		}
-
-		protected Map<MetricQuery, List<Metric>> compute() {
-
-			//if work is above threshold, break tasks up into smaller tasks
-			if(this.numReadEndponts > 1) {
-
-				List<MyRecursiveTask> subtasks =
-						new ArrayList<MyRecursiveTask>();
-				subtasks.addAll(createSubtasks());
-
-				for(MyRecursiveTask subtask : subtasks){
-					subtask.fork();
-				}
-
-				long result = 0;
-				for(MyRecursiveTask subtask : subtasks) {
-					result += subtask.join();
-				}
-				return result;
-
-			} else {
-
-				Map<MetricQuery, List<Metric>> metricsMap = new HashMap<>();
-				Map<MetricQuery, Future<List<Metric>>> futures = new HashMap<>();
-				Map<MetricQuery, Long> queryStartExecutionTime = new HashMap<>();    			
-
-				for (MetricQuery query : queries) {
-					String requestBody = fromEntity(query);
-
-					futures.put(query, _executorService.submit(new QueryWorker(requestUrl, requestBody)));
-					queryStartExecutionTime.put(query, System.currentTimeMillis());
-				}
-				for (Entry<MetricQuery, Future<List<Metric>>> entry : futures.entrySet()) {
-					try {
-						List<Metric> m = entry.getValue().get();
-						List<Metric> metrics = new ArrayList<>();
-
-						if (m != null) {
-							for (Metric metric : m) {
-								if (metric != null) {
-									metric.setQuery(entry.getKey());
-									metrics.add(metric);
-								}
-							}
-						}
-
-						instrumentQueryLatency(_monitorService, entry.getKey(), queryStartExecutionTime.get(entry.getKey()), "metrics");
-						metricsMap.put(entry.getKey(), metrics);
-					} catch (InterruptedException | ExecutionException e) {
-						_logger.warn("Failed to get metrics from TSDB. Reason: " + e.getMessage());
-						throw new SystemException("Failed to get metrics from TSDB. Reason: " + e.getMessage());
-					}
-				}
-				_logger.debug("Time to get Metrics = " + (System.currentTimeMillis() - start));
-				return metricsMap;
-
-				return numReadEndponts * 3;
-			}
-		}
-
-		private List<MyRecursiveTask> createSubtasks() {
-			List<MyRecursiveTask> subtasks =
-					new ArrayList<MyRecursiveTask>();
-
-			MyRecursiveTask subtask1 = new MyRecursiveTask(this.numReadEndponts / 2);
-			MyRecursiveTask subtask2 = new MyRecursiveTask(this.numReadEndponts / 2);
-
-			subtasks.add(subtask1);
-			subtasks.add(subtask2);
-
-			return subtasks;
-		}
-	}
-	 */
 
 	/**
 	 * Helper class used to parallelize query execution.

@@ -704,7 +704,7 @@ public class DefaultTSDBService extends DefaultService implements TSDBService {
         }
 
         /* Annotations should have the same scope, metric, type and tags and timestamp. */
-        private AnnotationWrapper(Set<Annotation> annotations, TSDBService service) {
+        AnnotationWrapper(Set<Annotation> annotations, TSDBService service) {
             this();
             _service = service;
             for (Annotation annotation : annotations) {
