@@ -116,6 +116,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	private CloseableHttpClient _writePort;
 	private final String _writeEndpoint;
 	private final List<String> _readEndPoints = new ArrayList<>();
+	private final List<String> _readBackupEndPoints = new ArrayList<>();
 	private final SystemConfiguration _configuration;
 	private final ExecutorService _executorService;
 	private final MonitorService _monitorService;
@@ -151,6 +152,11 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		String[] readEndPoints = readEndPoint.split(",");
 		Collections.addAll(_readEndPoints, readEndPoints);
 		requireArgument((_readEndPoints != null) && (!_readEndPoints.isEmpty()), "Illegal read endpoint URL.");
+
+		String readBackupEndPoint = _configuration.getValue(Property.TSD_ENDPOINT_BACKUP_READ.getName(), Property.TSD_ENDPOINT_BACKUP_READ.getDefaultValue());
+		String[] readBackupEndPoints = readBackupEndPoint.split(",");
+		Collections.addAll(_readBackupEndPoints, readBackupEndPoints);
+
 		_writeEndpoint = _configuration.getValue(Property.TSD_ENDPOINT_WRITE.getName(), Property.TSD_ENDPOINT_WRITE.getDefaultValue());
 		requireArgument((_writeEndpoint != null) && (!_writeEndpoint.isEmpty()), "Illegal write endpoint URL.");
 		requireArgument(connCount >= 2, "At least two connections are required.");
@@ -158,6 +164,10 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		try {
 			for(String readEndpoint: _readEndPoints){
 				_readPortMap.put(readEndpoint, getClient(readEndpoint, connCount / 2, connTimeout, socketTimeout));
+			}
+			for(String readEndpoint: _readBackupEndPoints){
+				if(!readEndpoint.isEmpty())
+					_readPortMap.put(readEndpoint, getClient(readEndpoint, connCount / 2, connTimeout, socketTimeout));
 			}
 			_writePort = getClient(_writeEndpoint, connCount / 2, connTimeout, socketTimeout);
 			_executorService = Executors.newFixedThreadPool(connCount);
@@ -337,17 +347,29 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 			List<Future<List<Metric>>> futures = entry.getValue();
 			List<Metric> metrics = new ArrayList<>();
 			String metricIdentifier;
+			int index = 0;
 
 			for( Future<List<Metric>> future : futures){
 
-				List<Metric> m;
+				List<Metric> m =null;
 				try{					
 					m = future.get();
 				}
 				catch (InterruptedException | ExecutionException e) {
 					_logger.warn("Failed to get metrics from TSDB. Reason: " + e.getMessage());
-					continue;
+
+					try{
+						if(!_readBackupEndPoints.get(index).isEmpty()) {
+							_logger.warn("Trying to read from Backup endpoint");
+							m = new QueryWorker(_readBackupEndPoints.get(index) + "/api/query", _readBackupEndPoints.get(index), fromEntity(entry.getKey())).call();
+						}
+					} catch (Exception ex) {
+						_logger.warn("Failed to get metrics from Backup TSDB. Reason: " + ex.getMessage());
+						continue;
+					}
 				}
+
+				index++;
 
 				if (m != null) {
 					for (Metric metric : m) {
@@ -700,6 +722,8 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 
 		/** The TSDB read endpoint. */
 		TSD_ENDPOINT_READ("service.property.tsdb.endpoint.read", "http://localhost:4466"),
+		/** The TSDB backup read endpoint. */
+		TSD_ENDPOINT_BACKUP_READ("service.property.tsdb.endpoint.backup.read", "http://localhost:4466"),		
 		/** The TSDB write endpoint. */
 		TSD_ENDPOINT_WRITE("service.property.tsdb.endpoint.write", "http://localhost:4477"),
 		/** The TSDB connection timeout. */
