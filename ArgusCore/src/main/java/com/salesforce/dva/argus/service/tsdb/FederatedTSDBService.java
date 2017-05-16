@@ -322,13 +322,35 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 
 		long start = System.currentTimeMillis();
 
-
 		Map<MetricQuery, List<Metric>> metricsMap = new HashMap<>();
 		Map<MetricQuery, List<Future<List<Metric>>>> futuresMap = new HashMap<>();
 		Map<MetricQuery, Long> queryStartExecutionTime = new HashMap<>();
 
-		/* TODO: Get list of Read TSDB endpoints from Zookeeper */
+		List<MetricQuery> queriesSplit = new ArrayList<>();
+//        Map<MetricQuery, MetricQuery> mapQuerySubQuery = new HashMap<>();
+		
+		// Split large range queries into smaller queries
 		for (MetricQuery query : queries) {
+			if(query.getEndTimestamp() - query.getStartTimestamp() > 86400000L){
+				for(long time=query.getStartTimestamp(); time<=query.getEndTimestamp(); time=time+86400000L){
+					MetricQuery mq = new MetricQuery(query);
+					mq.setStartTimestamp(time);
+					if(time+86400000L > query.getEndTimestamp()){
+						mq.setEndTimestamp(query.getEndTimestamp());
+					} else {
+						mq.setEndTimestamp(time+86400000L);
+					}
+					queriesSplit.add(mq);
+				}
+			} else {
+				queriesSplit.add(query);
+//				mapQuerySubQuery.put(query,query);
+				
+			}
+		}
+
+		/* TODO: Get list of Read TSDB endpoints from Zookeeper */
+		for (MetricQuery query : queriesSplit) {
 			String requestBody = fromEntity(query);
 			List<Future<List<Metric>>> futures = new ArrayList<>();
 			// Look at each read endpoint
@@ -341,9 +363,9 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		}
 
 
-		Map<String, Metric> metricMergeMap = new HashMap<>();
 		for (Entry<MetricQuery, List<Future<List<Metric>>>> entry : futuresMap.entrySet()) {
 
+			Map<String, Metric> metricMergeMap = new HashMap<>();
 			List<Future<List<Metric>>> futures = entry.getValue();
 			List<Metric> metrics = new ArrayList<>();
 			String metricIdentifier;
@@ -371,6 +393,8 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 
 				index++;
 
+				
+				// Merge metrics from different endpoints
 				if (m != null) {
 					for (Metric metric : m) {
 						if (metric != null) {
@@ -395,6 +419,29 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 			instrumentQueryLatency(_monitorService, entry.getKey(), queryStartExecutionTime.get(entry.getKey()), "metrics");
 			metricsMap.put(entry.getKey(), metrics);
 		}
+		
+		// Merge metrics from split queries
+		Map<String, Metric> metricMergeMap = new HashMap<>();
+		String metricIdentifier = null;
+		
+		for(Entry<MetricQuery, List<Metric>> entry : metricsMap.entrySet()){
+			List<Metric> metrics =  entry.getValue();
+			if (metrics != null) {
+				for (Metric metric : metrics) {
+					if (metric != null) {
+						metricIdentifier = metric.getIdentifier();
+						Metric finalMetric = metricMergeMap.get(metricIdentifier);
+						if(finalMetric == null){
+							metric.setQuery(entry.getKey());
+							metricMergeMap.put(metricIdentifier, metric);
+						} else {
+							finalMetric.addDatapoints(metric.getDatapoints());
+						}
+					}
+				}	
+			}
+		}
+			
 		_logger.debug("Time to get Metrics = " + (System.currentTimeMillis() - start));
 		return metricsMap;
 	}
