@@ -332,6 +332,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 
 		// Split large range queries into smaller queries
 		for (MetricQuery query : queries) {
+			queryStartExecutionTime.put(query, System.currentTimeMillis());
 			List<MetricQuery> metricSubQueries = new ArrayList<>();
 			if(query.getEndTimestamp() - query.getStartTimestamp() > 86400000L){
 				for(long time=query.getStartTimestamp(); time<=query.getEndTimestamp(); time=time+86400000L){
@@ -363,7 +364,6 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 				futures.add(_executorService.submit(new QueryWorker(requestUrl, readEndpoint, requestBody)));
 			}
 			futuresMap.put(query, futures);
-			queryStartExecutionTime.put(query, System.currentTimeMillis());
 		}
 
 
@@ -415,6 +415,11 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 				}
 
 			}
+
+			for(Metric finalMetric: metricMergeMap.values()){
+				metrics.add(finalMetric);
+			}
+
 			metricsSubQueryMap.put(entry.getKey(), metrics);
 		}
 
@@ -442,9 +447,9 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 						}
 					}	
 				}
-				for(Metric finalMetric: metricMergeMap.values()){
-					metrics.add(finalMetric);
-				}				
+			}
+			for(Metric finalMetric: metricMergeMap.values()){
+				metrics.add(finalMetric);
 			}
 			instrumentQueryLatency(_monitorService, query, queryStartExecutionTime.get(query), "metrics");
 			metricsMap.put(query, metrics);
