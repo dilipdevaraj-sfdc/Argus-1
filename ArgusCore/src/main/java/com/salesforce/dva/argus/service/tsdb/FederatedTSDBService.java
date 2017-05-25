@@ -320,143 +320,14 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		requireArgument(queries != null, "Metric Queries cannot be null.");
 		_logger.trace("Active Threads in the pool = " + ((ThreadPoolExecutor) _executorService).getActiveCount());
 
-		long start = System.currentTimeMillis();
 
-		Map<MetricQuery, List<Metric>> metricsMap = new HashMap<>();
-		Map<MetricQuery, List<Metric>> metricsSubQueryMap = new HashMap<>();
-		Map<MetricQuery, List<Future<List<Metric>>>> futuresMap = new HashMap<>();
 		Map<MetricQuery, Long> queryStartExecutionTime = new HashMap<>();
+		Map<MetricQuery, List<MetricQuery>> mapQuerySubQueries = new HashMap<>();
 
-		List<MetricQuery> queriesSplit = new ArrayList<>();
-		Map<MetricQuery, List<MetricQuery>> mapQuerySubQuery = new HashMap<>();
-
-		// Split large range queries into smaller queries
-		for (MetricQuery query : queries) {
-			queryStartExecutionTime.put(query, System.currentTimeMillis());
-			List<MetricQuery> metricSubQueries = new ArrayList<>();
-			if(query.getEndTimestamp() - query.getStartTimestamp() > 86400000L){
-				for(long time=query.getStartTimestamp(); time<=query.getEndTimestamp(); time=time+86400000L){
-					MetricQuery mq = new MetricQuery(query);
-					mq.setStartTimestamp(time);
-					if(time+86400000L > query.getEndTimestamp()){
-						mq.setEndTimestamp(query.getEndTimestamp());
-					} else {
-						mq.setEndTimestamp(time+86400000L);
-					}
-					queriesSplit.add(mq);
-					metricSubQueries.add(mq);
-				}
-				mapQuerySubQuery.put(query,metricSubQueries);
-			} else {
-				metricSubQueries.add(query);
-				mapQuerySubQuery.put(query,metricSubQueries);
-				queriesSplit.add(query);
-			}
-		}
-
-		/* TODO: Get list of Read TSDB endpoints from Zookeeper */
-		for (MetricQuery query : queriesSplit) {
-			String requestBody = fromEntity(query);
-			List<Future<List<Metric>>> futures = new ArrayList<>();
-			// Look at each read endpoint
-			for(String readEndpoint: _readEndPoints){
-				String requestUrl = readEndpoint + "/api/query";
-				futures.add(_executorService.submit(new QueryWorker(requestUrl, readEndpoint, requestBody)));
-			}
-			futuresMap.put(query, futures);
-		}
-
-
-		for (Entry<MetricQuery, List<Future<List<Metric>>>> entry : futuresMap.entrySet()) {
-
-			Map<String, Metric> metricMergeMap = new HashMap<>();
-			List<Future<List<Metric>>> futures = entry.getValue();
-			List<Metric> metrics = new ArrayList<>();
-			String metricIdentifier;
-			int index = 0;
-
-			for( Future<List<Metric>> future : futures){
-
-				List<Metric> m =null;
-				try{					
-					m = future.get();
-				}
-				catch (InterruptedException | ExecutionException e) {
-					_logger.warn("Failed to get metrics from TSDB. Reason: " + e.getMessage());
-
-					try{
-						if(!_readBackupEndPoints.get(index).isEmpty()) {
-							_logger.warn("Trying to read from Backup endpoint");
-							m = new QueryWorker(_readBackupEndPoints.get(index) + "/api/query", _readBackupEndPoints.get(index), fromEntity(entry.getKey())).call();
-						}
-					} catch (Exception ex) {
-						_logger.warn("Failed to get metrics from Backup TSDB. Reason: " + ex.getMessage());
-						continue;
-					}
-				}
-
-				index++;
-
-
-				// Merge metrics from different endpoints
-				if (m != null) {
-					for (Metric metric : m) {
-						if (metric != null) {
-							metricIdentifier = metric.getIdentifier();
-							Metric finalMetric = metricMergeMap.get(metricIdentifier);
-							if(finalMetric == null){
-								metric.setQuery(entry.getKey());
-								metricMergeMap.put(metricIdentifier, metric);
-							} else {
-								finalMetric.addDatapoints(metric.getDatapoints());
-							}
-						}
-					}
-				}
-
-			}
-
-			for(Metric finalMetric: metricMergeMap.values()){
-				metrics.add(finalMetric);
-			}
-
-			metricsSubQueryMap.put(entry.getKey(), metrics);
-		}
-
-		// Merge metrics from split queries
-		Map<String, Metric> metricMergeMap = new HashMap<>();
-		String metricIdentifier = null;
-
-		// for(Entry<MetricQuery, List<Metric>> entry : metricsMap.entrySet()){
-		for(MetricQuery query : queries){
-			List<Metric> metrics = new ArrayList<>();
-			List<MetricQuery> subQueries = mapQuerySubQuery.get(query);
-			for(MetricQuery subQuery : subQueries){
-				List<Metric> metricsFromSubQuery = metricsSubQueryMap.get(subQuery);
-				if (metricsFromSubQuery != null) {
-					for (Metric metric : metricsFromSubQuery) {
-						if (metric != null) {
-							metricIdentifier = metric.getIdentifier();
-							Metric finalMetric = metricMergeMap.get(metricIdentifier);
-							if(finalMetric == null){
-								metric.setQuery(query);
-								metricMergeMap.put(metricIdentifier, metric);
-							} else {
-								finalMetric.addDatapoints(metric.getDatapoints());
-							}
-						}
-					}	
-				}
-			}
-			for(Metric finalMetric: metricMergeMap.values()){
-				metrics.add(finalMetric);
-			}
-			instrumentQueryLatency(_monitorService, query, queryStartExecutionTime.get(query), "metrics");
-			metricsMap.put(query, metrics);
-		}
-
-		_logger.debug("Time to get Metrics = " + (System.currentTimeMillis() - start));
-		return metricsMap;
+		List<MetricQuery> queriesSplit = timeFederateQueries(queries, queryStartExecutionTime, mapQuerySubQueries);
+		Map<MetricQuery, List<Future<List<Metric>>>> queryFuturesMap = endPointFederateQueries(queriesSplit);
+		Map<MetricQuery, List<Metric>> subQueryMetricsMap = endPointMergeMetrics(queryFuturesMap);
+		return  timeMergeMetrics(queries, mapQuerySubQueries, subQueryMetricsMap, queryStartExecutionTime);
 	}
 
 	/** @see  TSDBService#putAnnotations(java.util.List) */
@@ -769,7 +640,145 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		return result;
 	}
 
+	//  Federate query to list of Read TSDB endpoints	
+	private Map<MetricQuery, List<Future<List<Metric>>>> endPointFederateQueries(List<MetricQuery> queries){
+		Map<MetricQuery, List<Future<List<Metric>>>> queryFuturesMap = new HashMap<>();
+		for (MetricQuery query : queries) {
+			String requestBody = fromEntity(query);
+			List<Future<List<Metric>>> futures = new ArrayList<>();
+			// Look at each read endpoint
+			for(String readEndpoint: _readEndPoints){
+				String requestUrl = readEndpoint + "/api/query";
+				futures.add(_executorService.submit(new QueryWorker(requestUrl, readEndpoint, requestBody)));
+			}
+			queryFuturesMap.put(query, futures);
+		}
+		return queryFuturesMap;
+	}
 
+	private Map<MetricQuery, List<Metric>> endPointMergeMetrics(Map<MetricQuery, List<Future<List<Metric>>>> queryFuturesMap){
+		Map<MetricQuery, List<Metric>> subQueryMetricsMap = new HashMap<>();
+		for (Entry<MetricQuery, List<Future<List<Metric>>>> entry : queryFuturesMap.entrySet()) {
+			Map<String, Metric> metricMergeMap = new HashMap<>();
+			List<Future<List<Metric>>> futures = entry.getValue();
+			List<Metric> metrics = new ArrayList<>();
+			String metricIdentifier;
+			int index = 0;
+
+			for( Future<List<Metric>> future : futures){
+				List<Metric> m =null;
+				try{					
+					m = future.get();
+				}
+				catch (InterruptedException | ExecutionException e) {
+					_logger.warn("Failed to get metrics from TSDB. Reason: " + e.getMessage());
+					try{
+						if(!_readBackupEndPoints.get(index).isEmpty()) {
+							_logger.warn("Trying to read from Backup endpoint");
+							m = new QueryWorker(_readBackupEndPoints.get(index) + "/api/query", _readBackupEndPoints.get(index), fromEntity(entry.getKey())).call();
+						}
+					} catch (Exception ex) {
+						_logger.warn("Failed to get metrics from Backup TSDB. Reason: " + ex.getMessage());
+						continue;
+					}
+				}
+
+				index++;
+
+				// Merge metrics from different endpoints
+				if (m != null) {
+					for (Metric metric : m) {
+						if (metric != null) {
+							metricIdentifier = metric.getIdentifier();
+							Metric finalMetric = metricMergeMap.get(metricIdentifier);
+							if(finalMetric == null){
+								metric.setQuery(entry.getKey());
+								metricMergeMap.put(metricIdentifier, metric);
+							} else {
+								finalMetric.addDatapoints(metric.getDatapoints());
+							}
+						}
+					}
+				}
+
+			}
+
+			for(Metric finalMetric: metricMergeMap.values()){
+				metrics.add(finalMetric);
+			}
+
+			subQueryMetricsMap.put(entry.getKey(), metrics);
+		}
+		return subQueryMetricsMap;
+	}
+
+	// Split large range queries into smaller queries
+	private List<MetricQuery> timeFederateQueries(List<MetricQuery> queries, 
+			Map<MetricQuery, Long> queryStartExecutionTime,
+			Map<MetricQuery, List<MetricQuery>> mapQuerySubQuery){
+		List<MetricQuery> queriesSplit = new ArrayList<>();
+		for (MetricQuery query : queries) {
+			queryStartExecutionTime.put(query, System.currentTimeMillis());
+			List<MetricQuery> metricSubQueries = new ArrayList<>();
+			if(query.getEndTimestamp() - query.getStartTimestamp() > 86400000L){
+				for(long time=query.getStartTimestamp(); time<=query.getEndTimestamp(); time=time+86400000L){
+					MetricQuery mq = new MetricQuery(query);
+					mq.setStartTimestamp(time);
+					if(time+86400000L > query.getEndTimestamp()){
+						mq.setEndTimestamp(query.getEndTimestamp());
+					} else {
+						mq.setEndTimestamp(time+86400000L);
+					}
+					queriesSplit.add(mq);
+					metricSubQueries.add(mq);
+				}
+				mapQuerySubQuery.put(query,metricSubQueries);
+			} else {
+				metricSubQueries.add(query);
+				mapQuerySubQuery.put(query,metricSubQueries);
+				queriesSplit.add(query);
+			}
+		}
+
+		return queriesSplit;
+	}
+
+	// Merge metrics from split queries
+	private Map<MetricQuery, List<Metric>> timeMergeMetrics(List<MetricQuery> queries, 
+			Map<MetricQuery, List<MetricQuery>> mapQuerySubQueries,
+			Map<MetricQuery, List<Metric>> subQueryMetricsMap,
+			Map<MetricQuery, Long> queryStartExecutionTime){
+		Map<MetricQuery, List<Metric>> queryMetricsMap = new HashMap<>();
+		Map<String, Metric> metricMergeMap = new HashMap<>();
+		String metricIdentifier = null;
+		for(MetricQuery query : queries){
+			List<Metric> metrics = new ArrayList<>();
+			List<MetricQuery> subQueries = mapQuerySubQueries.get(query);
+			for(MetricQuery subQuery : subQueries){
+				List<Metric> metricsFromSubQuery = subQueryMetricsMap.get(subQuery);
+				if (metricsFromSubQuery != null) {
+					for (Metric metric : metricsFromSubQuery) {
+						if (metric != null) {
+							metricIdentifier = metric.getIdentifier();
+							Metric finalMetric = metricMergeMap.get(metricIdentifier);
+							if(finalMetric == null){
+								metric.setQuery(query);
+								metricMergeMap.put(metricIdentifier, metric);
+							} else {
+								finalMetric.addDatapoints(metric.getDatapoints());
+							}
+						}
+					}	
+				}
+			}
+			for(Metric finalMetric: metricMergeMap.values()){
+				metrics.add(finalMetric);
+			}
+			instrumentQueryLatency(_monitorService, query, queryStartExecutionTime.get(query), "metrics");
+			queryMetricsMap.put(query, metrics);
+		}
+		return queryMetricsMap;
+	}
 
 	//~ Enums ****************************************************************************************************************************************
 
