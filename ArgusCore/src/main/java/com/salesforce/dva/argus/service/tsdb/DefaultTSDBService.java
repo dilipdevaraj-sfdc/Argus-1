@@ -411,7 +411,7 @@ public class DefaultTSDBService extends DefaultService implements TSDBService {
     /* Converts a list of annotations into a list of annotation wrappers for use in serialization.  Resulting list is sorted by target annotation
      * scope and timestamp.
      */
-    private List<AnnotationWrapper> toAnnotationWrappers(List<Annotation> annotations) {
+    List<AnnotationWrapper> toAnnotationWrappers(List<Annotation> annotations) {
         Map<String, Set<Annotation>> sortedByUid = new TreeMap<>();
 
         for (Annotation annotation : annotations) {
@@ -506,7 +506,7 @@ public class DefaultTSDBService extends DefaultService implements TSDBService {
     }
 
     /* Helper to process the response. */
-    private String extractResponse(HttpResponse response) {
+    String extractResponse(HttpResponse response) {
         if (response != null) {
             int status = response.getStatusLine().getStatusCode();
 
@@ -656,7 +656,7 @@ public class DefaultTSDBService extends DefaultService implements TSDBService {
         }
     }
     
-    private void instrumentQueryLatency(final MonitorService monitorService, final AnnotationQuery query, final long start,
+    void instrumentQueryLatency(final MonitorService monitorService, final AnnotationQuery query, final long start,
     		final String measurementType) {
 		String timeWindow = QueryTimeWindow.getWindow(query.getEndTimestamp() - query.getStartTimestamp());
 		Map<String, String> tags = new HashMap<String, String>();
@@ -672,7 +672,7 @@ public class DefaultTSDBService extends DefaultService implements TSDBService {
      *
      * @author  Tom Valine (tvaline@salesforce.com), Bhinav Sura (bhinav.sura@salesforce.com)
      */
-    private enum HttpMethod {
+    enum HttpMethod {
 
         /** POST operation. */
         POST,
