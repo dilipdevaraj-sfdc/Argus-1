@@ -185,6 +185,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	@Override
 	public void dispose() {
 		super.dispose();
+        _defaultTSDBService.dispose();		
 		for (CloseableHttpClient client : _readPortMap.values()) {
 			try {
 				client.close();
@@ -258,15 +259,18 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 					try {
 						if (!_readBackupEndPoints.get(index).isEmpty()) {
 							_logger.warn("Trying to read from Backup endpoint");
-							HttpResponse response = executeHttpRequest(HttpMethod.GET, requestUrl, readEndPoint, null);
+							pattern = _readBackupEndPoints.get(index) + "/api/query?{0}";
+							requestUrl = MessageFormat.format(pattern, query.toString());							
+							HttpResponse response = executeHttpRequest(HttpMethod.GET, requestUrl, _readBackupEndPoints.get(index), null);
 							wrappers = toEntity(((DefaultTSDBService) _defaultTSDBService).extractResponse(response), new TypeReference<AnnotationWrappers>() {
 							});
 						}
 					} catch (Exception e) {
 						_logger.warn("Failed to get annotations from Backup TSDB. Reason: " + e.getMessage());
+						index++;
 						continue;
 					}					
-				}
+				} 
 
 				index++;
 
@@ -412,8 +416,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		return queryFuturesMap;
 	}
 
-	private Map<MetricQuery, List<Metric>> endPointMergeMetrics(
-			Map<MetricQuery, List<Future<List<Metric>>>> queryFuturesMap) {
+	private Map<MetricQuery, List<Metric>> endPointMergeMetrics(Map<MetricQuery, List<Future<List<Metric>>>> queryFuturesMap) {
 		Map<MetricQuery, List<Metric>> subQueryMetricsMap = new HashMap<>();
 		for (Entry<MetricQuery, List<Future<List<Metric>>>> entry : queryFuturesMap.entrySet()) {
 			Map<String, Metric> metricMergeMap = new HashMap<>();
@@ -436,6 +439,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 						}
 					} catch (Exception ex) {
 						_logger.warn("Failed to get metrics from Backup TSDB. Reason: " + ex.getMessage());
+						index++;
 						continue;
 					}
 				}
@@ -457,7 +461,6 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 						}
 					}
 				}
-
 			}
 
 			for (Metric finalMetric : metricMergeMap.values()) {
