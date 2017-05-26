@@ -89,7 +89,7 @@ import com.salesforce.dva.argus.system.SystemException;
 
 /**
  * The federated implementation of the TSDBService.
- * - Federation occurs for multiple endpoints (and backup if primary endpoint is down)
+ * - Federation occurs for multiple endpoints (it uses backup if primary endpoint is down)
  * - Federation occurs for large range queries into smaller range sub queries
  *
  * @author Dilip Devaraj (ddevaraj@salesforce.com)
