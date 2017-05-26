@@ -97,7 +97,6 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 
 	// ~ Static fields/initializers
 	// *******************************************************************************************************************
-	static final String DELIMITER = "-__-";
 	private static final long TIME_FEDERATE_LIMIT_MILLIS = 86400000L;
 
 	// ~ Instance fields
