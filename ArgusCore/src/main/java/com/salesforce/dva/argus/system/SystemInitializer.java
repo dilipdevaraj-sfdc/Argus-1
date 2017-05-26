@@ -58,6 +58,7 @@ import com.salesforce.dva.argus.service.monitor.DefaultMonitorService;
 import com.salesforce.dva.argus.service.schema.CachedDiscoveryService;
 import com.salesforce.dva.argus.service.schema.DefaultDiscoveryService;
 import com.salesforce.dva.argus.service.tsdb.CachedTSDBService;
+import com.salesforce.dva.argus.service.tsdb.DefaultTSDBService;
 import com.salesforce.dva.argus.service.warden.DefaultWardenService;
 import com.salesforce.dva.argus.system.SystemConfiguration.Property;
 
@@ -237,6 +238,8 @@ final class SystemInitializer extends AbstractModule {
         bindConcreteClassWithNamedAnnotation(getConcreteClassToBind(Property.TSDB_SERVICE_IMPL_CLASS, TSDBService.class), TSDBService.class);
         bindConcreteClassWithNamedAnnotation(DefaultDiscoveryService.class, DiscoveryService.class);
 
+        bind(TSDBService.class).annotatedWith(SecondNamedBinding.class).to(DefaultTSDBService.class);
+        
         // static binding
         bindConcreteClass(CachedTSDBService.class, TSDBService.class);
         bindConcreteClass(DefaultUserService.class, UserService.class);
