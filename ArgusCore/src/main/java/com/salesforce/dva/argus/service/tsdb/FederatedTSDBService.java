@@ -98,6 +98,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	// ~ Static fields/initializers
 	// *******************************************************************************************************************
 	static final String DELIMITER = "-__-";
+	private static final long TIME_FEDERATE_LIMIT = 86400000L;
 
 	// ~ Instance fields
 	// ******************************************************************************************************************************
@@ -477,14 +478,14 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		for (MetricQuery query : queries) {
 			queryStartExecutionTime.put(query, System.currentTimeMillis());
 			List<MetricQuery> metricSubQueries = new ArrayList<>();
-			if (query.getEndTimestamp() - query.getStartTimestamp() > 86400000L) {
-				for (long time = query.getStartTimestamp(); time <= query.getEndTimestamp(); time = time + 86400000L) {
+			if (query.getEndTimestamp() - query.getStartTimestamp() > TIME_FEDERATE_LIMIT) {
+				for (long time = query.getStartTimestamp(); time <= query.getEndTimestamp(); time = time + TIME_FEDERATE_LIMIT) {
 					MetricQuery mq = new MetricQuery(query);
 					mq.setStartTimestamp(time);
-					if (time + 86400000L > query.getEndTimestamp()) {
+					if (time + TIME_FEDERATE_LIMIT > query.getEndTimestamp()) {
 						mq.setEndTimestamp(query.getEndTimestamp());
 					} else {
-						mq.setEndTimestamp(time + 86400000L);
+						mq.setEndTimestamp(time + TIME_FEDERATE_LIMIT);
 					}
 					queriesSplit.add(mq);
 					metricSubQueries.add(mq);
@@ -545,10 +546,9 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	 * @author Dilip Devaraj (ddevaraj@salesforce.com)
 	 */
 	public enum Property {
-
-		/** The TSDB read endpoint. */
+		/** The TSDB multi read endpoint. */
 		TSD_MULTI_ENDPOINT_READ("service.property.tsdb.multi.endpoint.read", "http://localhost:4466"),
-		/** The TSDB backup read endpoint. */
+		/** The TSDB backup multi read endpoint. */
 		TSD_MULTI_ENDPOINT_BACKUP_READ("service.property.tsdb.multi.endpoint.backup.read", "http://localhost:4466"),
 		/** The TSDB write endpoint. */
 		TSD_ENDPOINT_WRITE("service.property.tsdb.endpoint.write", "http://localhost:4477"),
