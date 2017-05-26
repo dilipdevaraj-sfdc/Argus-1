@@ -98,7 +98,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	// ~ Static fields/initializers
 	// *******************************************************************************************************************
 	static final String DELIMITER = "-__-";
-	private static final long TIME_FEDERATE_LIMIT = 86400000L;
+	private static final long TIME_FEDERATE_LIMIT_MILLIS = 86400000L;
 
 	// ~ Instance fields
 	// ******************************************************************************************************************************
@@ -478,14 +478,14 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		for (MetricQuery query : queries) {
 			queryStartExecutionTime.put(query, System.currentTimeMillis());
 			List<MetricQuery> metricSubQueries = new ArrayList<>();
-			if (query.getEndTimestamp() - query.getStartTimestamp() > TIME_FEDERATE_LIMIT) {
-				for (long time = query.getStartTimestamp(); time <= query.getEndTimestamp(); time = time + TIME_FEDERATE_LIMIT) {
+			if (query.getEndTimestamp() - query.getStartTimestamp() > TIME_FEDERATE_LIMIT_MILLIS) {
+				for (long time = query.getStartTimestamp(); time <= query.getEndTimestamp(); time = time + TIME_FEDERATE_LIMIT_MILLIS) {
 					MetricQuery mq = new MetricQuery(query);
 					mq.setStartTimestamp(time);
-					if (time + TIME_FEDERATE_LIMIT > query.getEndTimestamp()) {
+					if (time + TIME_FEDERATE_LIMIT_MILLIS > query.getEndTimestamp()) {
 						mq.setEndTimestamp(query.getEndTimestamp());
 					} else {
-						mq.setEndTimestamp(time + TIME_FEDERATE_LIMIT);
+						mq.setEndTimestamp(time + TIME_FEDERATE_LIMIT_MILLIS);
 					}
 					queriesSplit.add(mq);
 					metricSubQueries.add(mq);
