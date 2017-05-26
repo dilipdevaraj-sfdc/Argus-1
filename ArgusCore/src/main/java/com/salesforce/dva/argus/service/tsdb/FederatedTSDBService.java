@@ -79,7 +79,6 @@ import com.salesforce.dva.argus.entity.Annotation;
 import com.salesforce.dva.argus.entity.Metric;
 import com.salesforce.dva.argus.service.DefaultService;
 import com.salesforce.dva.argus.service.MonitorService;
-import com.salesforce.dva.argus.service.NamedBinding;
 import com.salesforce.dva.argus.service.SecondNamedBinding;
 import com.salesforce.dva.argus.service.TSDBService;
 import com.salesforce.dva.argus.service.tsdb.DefaultTSDBService.AnnotationWrapper;
@@ -186,7 +185,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	@Override
 	public void dispose() {
 		super.dispose();
-        _defaultTSDBService.dispose();		
+		_defaultTSDBService.dispose();		
 		for (CloseableHttpClient client : _readPortMap.values()) {
 			try {
 				client.close();
@@ -252,7 +251,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 				String requestUrl = MessageFormat.format(pattern, query.toString());
 				List<AnnotationWrapper> wrappers = null;
 				try {
-					HttpResponse response = executeHttpRequest(HttpMethod.GET, requestUrl, readEndPoint, null);
+					HttpResponse response = executeHttpRequest(HttpMethod.GET, requestUrl,  _readPortMap.get(readEndPoint), null);
 					wrappers = toEntity(((DefaultTSDBService) _defaultTSDBService).extractResponse(response), new TypeReference<AnnotationWrappers>() {
 					});
 				} catch (Exception ex) {
@@ -262,7 +261,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 							_logger.warn("Trying to read from Backup endpoint");
 							pattern = _readBackupEndPoints.get(index) + "/api/query?{0}";
 							requestUrl = MessageFormat.format(pattern, query.toString());							
-							HttpResponse response = executeHttpRequest(HttpMethod.GET, requestUrl, _readBackupEndPoints.get(index), null);
+							HttpResponse response = executeHttpRequest(HttpMethod.GET, requestUrl, _readPortMap.get( _readBackupEndPoints.get(index)), null);
 							wrappers = toEntity(((DefaultTSDBService) _defaultTSDBService).extractResponse(response), new TypeReference<AnnotationWrappers>() {
 							});
 						}
@@ -356,10 +355,8 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	}
 
 	/* Execute a request given by type requestType. */
-	@SuppressWarnings("resource")
-	private HttpResponse executeHttpRequest(HttpMethod requestType, String url, String endPoint, StringEntity entity) {
+	private HttpResponse executeHttpRequest(HttpMethod requestType, String url, CloseableHttpClient port, StringEntity entity) {
 		HttpResponse httpResponse = null;
-		CloseableHttpClient port = endPoint.startsWith(_writeEndpoint) ? _writePort : _readPortMap.get(endPoint);
 
 		if (entity != null) {
 			entity.setContentType("application/json");
@@ -621,7 +618,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 			_logger.debug("TSDB Query = " + _requestBody);
 
 			try {
-				HttpResponse response = executeHttpRequest(HttpMethod.POST, _requestUrl, _requestEndPoint,
+				HttpResponse response = executeHttpRequest(HttpMethod.POST, _requestUrl,  _readPortMap.get(_requestEndPoint),
 						new StringEntity(_requestBody));
 				List<Metric> metrics = toEntity(((DefaultTSDBService) _defaultTSDBService).extractResponse(response), new TypeReference<ResultSet>() {
 				}).getMetrics();
