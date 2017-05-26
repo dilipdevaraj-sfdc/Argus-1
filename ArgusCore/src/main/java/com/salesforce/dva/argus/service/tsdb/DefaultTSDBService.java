@@ -116,7 +116,7 @@ public class DefaultTSDBService extends DefaultService implements TSDBService {
 	protected final Logger _logger = LoggerFactory.getLogger(getClass());
 	private final Set<String> _writeEndpoints;
 	private final Map<String, CloseableHttpClient> _writeHttpClients = new HashMap<>();
-	private Map<String, CloseableHttpClient> _readPortMap = new HashMap<>();
+	private final Map<String, CloseableHttpClient> _readPortMap = new HashMap<>();
 	private final List<String> _readEndPoints;
 	private final List<String> _readBackupEndPoints;
 
