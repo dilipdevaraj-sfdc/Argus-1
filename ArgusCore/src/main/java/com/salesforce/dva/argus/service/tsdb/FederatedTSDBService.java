@@ -89,6 +89,8 @@ import com.salesforce.dva.argus.system.SystemException;
 
 /**
  * The federated implementation of the TSDBService.
+ * - Federation occurs for multiple endpoints (and backup if primary endpoint is down)
+ * - Federation occurs for large range queries into smaller range sub queries
  *
  * @author Dilip Devaraj (ddevaraj@salesforce.com)
  */
@@ -118,8 +120,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	// *********************************************************************************************************************************
 
 	/**
-	 * Creates a new Federated TSDB Service having an equal number of read and
-	 * write routes.
+	 * Creates a new Federated TSDB Service
 	 *
 	 * @param config
 	 *            The system _configuration used to configure the service.
@@ -148,14 +149,14 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		int socketTimeout = Integer.parseInt(_configuration.getValue(Property.TSD_ENDPOINT_SOCKET_TIMEOUT.getName(),
 				Property.TSD_ENDPOINT_SOCKET_TIMEOUT.getDefaultValue()));
 
-		String readEndPoint = _configuration.getValue(Property.TSD_MULTI_ENDPOINT_READ.getName(),
+		String readMultiEndPoint = _configuration.getValue(Property.TSD_MULTI_ENDPOINT_READ.getName(),
 				Property.TSD_MULTI_ENDPOINT_READ.getDefaultValue());
-		Collections.addAll(_readEndPoints, readEndPoint.split(","));
+		Collections.addAll(_readEndPoints, readMultiEndPoint.split(","));
 		requireArgument((_readEndPoints != null) && (!_readEndPoints.isEmpty()), "Illegal read endpoint URL.");
 
-		String readBackupEndPoint = _configuration.getValue(Property.TSD_MULTI_ENDPOINT_BACKUP_READ.getName(),
+		String readBackupMultiEndPoint = _configuration.getValue(Property.TSD_MULTI_ENDPOINT_BACKUP_READ.getName(),
 				Property.TSD_MULTI_ENDPOINT_BACKUP_READ.getDefaultValue());
-		Collections.addAll(_readBackupEndPoints, readBackupEndPoint.split(","));
+		Collections.addAll(_readBackupEndPoints, readBackupMultiEndPoint.split(","));
 
 		_writeEndpoint = _configuration.getValue(Property.TSD_ENDPOINT_WRITE.getName(),
 				Property.TSD_ENDPOINT_WRITE.getDefaultValue());
@@ -617,8 +618,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 			_logger.debug("TSDB Query = " + _requestBody);
 
 			try {
-				HttpResponse response = executeHttpRequest(HttpMethod.POST, _requestUrl,  _readPortMap.get(_requestEndPoint),
-						new StringEntity(_requestBody));
+				HttpResponse response = executeHttpRequest(HttpMethod.POST, _requestUrl,  _readPortMap.get(_requestEndPoint), new StringEntity(_requestBody));
 				List<Metric> metrics = toEntity(((DefaultTSDBService) _defaultTSDBService).extractResponse(response), new TypeReference<ResultSet>() {
 				}).getMetrics();
 				return metrics;
