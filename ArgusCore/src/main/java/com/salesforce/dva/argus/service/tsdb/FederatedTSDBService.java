@@ -80,6 +80,7 @@ import com.salesforce.dva.argus.entity.Metric;
 import com.salesforce.dva.argus.service.DefaultService;
 import com.salesforce.dva.argus.service.MonitorService;
 import com.salesforce.dva.argus.service.NamedBinding;
+import com.salesforce.dva.argus.service.SecondNamedBinding;
 import com.salesforce.dva.argus.service.TSDBService;
 import com.salesforce.dva.argus.service.tsdb.DefaultTSDBService.AnnotationWrapper;
 import com.salesforce.dva.argus.service.tsdb.DefaultTSDBService.AnnotationWrappers;
@@ -131,7 +132,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	 *             If an error occurs configuring the service.
 	 */
 	@Inject
-	public FederatedTSDBService(SystemConfiguration config, MonitorService monitorService, @NamedBinding TSDBService tsdbService) {
+	public FederatedTSDBService(SystemConfiguration config, MonitorService monitorService, @SecondNamedBinding TSDBService tsdbService) {
 		super(config);
 		requireArgument(config != null, "System configuration cannot be null.");
 		requireArgument(monitorService != null, "Monitor service cannot be null.");
@@ -148,13 +149,13 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		int socketTimeout = Integer.parseInt(_configuration.getValue(Property.TSD_ENDPOINT_SOCKET_TIMEOUT.getName(),
 				Property.TSD_ENDPOINT_SOCKET_TIMEOUT.getDefaultValue()));
 
-		String readEndPoint = _configuration.getValue(Property.TSD_ENDPOINT_READ.getName(),
-				Property.TSD_ENDPOINT_READ.getDefaultValue());
+		String readEndPoint = _configuration.getValue(Property.TSD_MULTI_ENDPOINT_READ.getName(),
+				Property.TSD_MULTI_ENDPOINT_READ.getDefaultValue());
 		Collections.addAll(_readEndPoints, readEndPoint.split(","));
 		requireArgument((_readEndPoints != null) && (!_readEndPoints.isEmpty()), "Illegal read endpoint URL.");
 
-		String readBackupEndPoint = _configuration.getValue(Property.TSD_ENDPOINT_BACKUP_READ.getName(),
-				Property.TSD_ENDPOINT_BACKUP_READ.getDefaultValue());
+		String readBackupEndPoint = _configuration.getValue(Property.TSD_MULTI_ENDPOINT_BACKUP_READ.getName(),
+				Property.TSD_MULTI_ENDPOINT_BACKUP_READ.getDefaultValue());
 		Collections.addAll(_readBackupEndPoints, readBackupEndPoint.split(","));
 
 		_writeEndpoint = _configuration.getValue(Property.TSD_ENDPOINT_WRITE.getName(),
@@ -549,9 +550,9 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 	public enum Property {
 
 		/** The TSDB read endpoint. */
-		TSD_ENDPOINT_READ("service.property.tsdb.endpoint.read", "http://localhost:4466"),
+		TSD_MULTI_ENDPOINT_READ("service.property.tsdb.multi.endpoint.read", "http://localhost:4466"),
 		/** The TSDB backup read endpoint. */
-		TSD_ENDPOINT_BACKUP_READ("service.property.tsdb.endpoint.backup.read", "http://localhost:4466"),
+		TSD_MULTI_ENDPOINT_BACKUP_READ("service.property.tsdb.multi.endpoint.backup.read", "http://localhost:4466"),
 		/** The TSDB write endpoint. */
 		TSD_ENDPOINT_WRITE("service.property.tsdb.endpoint.write", "http://localhost:4477"),
 		/** The TSDB connection timeout. */
