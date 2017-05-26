@@ -399,13 +399,12 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		return httpResponse;
 	}
 
-	// Federate query to list of Read TSDB endpoints
+	/* Federate query to list of Read TSDB endpoints by using an executor service future */
 	private Map<MetricQuery, List<Future<List<Metric>>>> endPointFederateQueries(List<MetricQuery> queries) {
 		Map<MetricQuery, List<Future<List<Metric>>>> queryFuturesMap = new HashMap<>();
 		for (MetricQuery query : queries) {
 			String requestBody = fromEntity(query);
 			List<Future<List<Metric>>> futures = new ArrayList<>();
-			// Look at each read endpoint
 			for (String readEndpoint : _readEndPoints) {
 				String requestUrl = readEndpoint + "/api/query";
 				futures.add(_executorService.submit(new QueryWorker(requestUrl, readEndpoint, requestBody)));
@@ -415,6 +414,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		return queryFuturesMap;
 	}
 
+	/* Merge metrics from different endpoints for each query, by reading from future */
 	private Map<MetricQuery, List<Metric>> endPointMergeMetrics(Map<MetricQuery, List<Future<List<Metric>>>> queryFuturesMap) {
 		Map<MetricQuery, List<Metric>> subQueryMetricsMap = new HashMap<>();
 		for (Entry<MetricQuery, List<Future<List<Metric>>>> entry : queryFuturesMap.entrySet()) {
@@ -445,7 +445,6 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 
 				index++;
 
-				// Merge metrics from different endpoints
 				if (m != null) {
 					for (Metric metric : m) {
 						if (metric != null) {
@@ -471,7 +470,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		return subQueryMetricsMap;
 	}
 
-	// Split large range queries into smaller queries
+	/* Time based federation. Split large range queries into smaller queries */
 	private List<MetricQuery> timeFederateQueries(List<MetricQuery> queries,
 			Map<MetricQuery, Long> queryStartExecutionTime, Map<MetricQuery, List<MetricQuery>> mapQuerySubQuery) {
 		List<MetricQuery> queriesSplit = new ArrayList<>();
@@ -501,7 +500,7 @@ public class FederatedTSDBService extends DefaultService implements TSDBService 
 		return queriesSplit;
 	}
 
-	// Merge metrics from split queries
+	/* Merge metrics from smaller time queries */
 	private Map<MetricQuery, List<Metric>> timeMergeMetrics(List<MetricQuery> queries,
 			Map<MetricQuery, List<MetricQuery>> mapQuerySubQueries, Map<MetricQuery, List<Metric>> subQueryMetricsMap,
 			Map<MetricQuery, Long> queryStartExecutionTime) {
