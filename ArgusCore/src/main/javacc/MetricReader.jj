@@ -590,7 +590,11 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
 		        query.setDownsamplingPeriod(downsamplingPeriod);
 		        setQueryTimeWindow(query);
 		        List<MetricQuery> queries = discoveryService.getMatchingQueries(query);
-		        numDiscoveryResults = queries.size();
+		        if(queries.size() !=1 || queries.get(0) != query) {
+		        	numDiscoveryResults = queries.size();
+		        }else{
+		        	numDiscoveryResults = 0;
+		        }
 		        
 				List<Metric> metrics = new ArrayList<Metric>();
 	            Map<MetricQuery, List<Metric>> metricsMap = tsdbService.getMetrics(queries);

@@ -154,7 +154,7 @@ public class PerfFilter implements Filter {
 					}
 					
 					Integer numDiscoveryResults = (Integer) req.getAttribute("numDiscoveryResults");
-					if(numDiscoveryResults != null){
+					if(numDiscoveryResults != null && numDiscoveryResults !=0 ){
 						monitorService.modifyCustomCounter(DATA_READ_NUM_DISCOVERY_RESULTS_PER_MIN, numDiscoveryResults, tags);
 					}
 				}
