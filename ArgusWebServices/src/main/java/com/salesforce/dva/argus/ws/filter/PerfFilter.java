@@ -75,6 +75,7 @@ public class PerfFilter implements Filter {
 	private final String TAGS_TIME_WINDOW_KEY = "timeWindow";
 	private final String TAGS_EXPANDED_TIME_SERIES_RANGE_KEY = "expandedTimeSeriesRange";
 	private final String DATA_READ_NUM_TIME_SERIES_PER_MIN = "perf.ws.read.num.time.series";
+	private final String DATA_READ_NUM_DISCOVERY_RESULTS_PER_MIN = "perf.ws.read.num.discovery.results";
 
 	//~ Methods **************************************************************************************************************************************
 
@@ -150,6 +151,11 @@ public class PerfFilter implements Filter {
 					Integer numTimeSeries = (Integer) req.getAttribute("numTimeSeries");
 					if(numTimeSeries != null){
 						monitorService.modifyCustomCounter(DATA_READ_NUM_TIME_SERIES_PER_MIN, numTimeSeries, tags);
+					}
+					
+					Integer numDiscoveryResults = (Integer) req.getAttribute("numDiscoveryResults");
+					if(numDiscoveryResults != null){
+						monitorService.modifyCustomCounter(DATA_READ_NUM_DISCOVERY_RESULTS_PER_MIN, numDiscoveryResults, tags);
 					}
 				}
 
