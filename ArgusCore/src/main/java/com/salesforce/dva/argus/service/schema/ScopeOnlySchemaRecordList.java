@@ -21,13 +21,18 @@ import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
 import com.fasterxml.jackson.databind.node.JsonNodeType;
-import com.salesforce.dva.argus.entity.MetricSchemaRecord;
 import com.salesforce.dva.argus.entity.ScopeOnlySchemaRecord;
 import com.salesforce.dva.argus.service.SchemaService.RecordType;
 import com.salesforce.dva.argus.service.schema.MetricSchemaRecordList.HashAlgorithm;
 
 import net.openhft.hashing.LongHashFunction;
 
+/**
+ * Represents a list of scope names from discovery queries.
+ * Internally it has a mapping from hash id of scope names to the actual scope names.
+ *
+ * @author  Dilip Devaraj (ddevaraj@salesforce.com)
+ */
 public class ScopeOnlySchemaRecordList {
 	
 	private Map<String, ScopeOnlySchemaRecord> _idToSchemaRecordMap = new HashMap<>();
@@ -89,7 +94,6 @@ public class ScopeOnlySchemaRecordList {
 			}
 		}
     }
-	
 	
 	static class Deserializer extends JsonDeserializer<ScopeOnlySchemaRecordList> {
 

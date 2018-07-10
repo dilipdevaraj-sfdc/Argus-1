@@ -34,11 +34,9 @@ package com.salesforce.dva.argus.entity;
 import java.text.MessageFormat;
 
 /**
- * Represents a search result row for metric discovery queries.  Metric schema records are used to represent the Cartesian product of metric identifier fields and are provided
- * as the result of a metric discovery request.  Metric discovery is the mechanism by which a user can search for metric identifier fields to determine
- * which metrics are available in Argus along with their corresponding identifier fields.
+ * Represents a search result row for scope names discovery queries.
  *
- * @author  Tom Valine (tvaline@salesforce.com)
+ * @author  Dilip Devaraj (ddevaraj@salesforce.com)
  */
 public class ScopeOnlySchemaRecord {
 
@@ -116,20 +114,6 @@ public class ScopeOnlySchemaRecord {
 	@Override
 	public String toString() {
 		return MessageFormat.format("ScopeOnlySchemaRecord = (Scope = {0}", scope);
-	}
-
-	/*
-	 * Returns the Scope only  Schema Record constructed from a given string
-	 * @param s String representing the metric expression in the format scope:metric{tagKey=tagValue}:namespace 
-	 */
-	public static ScopeOnlySchemaRecord constructSchemaRecord(String s){
-
-		if(s==null || s.length()==0)
-			return null;
-
-		String[] querySplit=s.split(":"); 
-		String scope=querySplit[0];
-		return new ScopeOnlySchemaRecord(scope);
 	}
 
 	public static String print(ScopeOnlySchemaRecord msr) {

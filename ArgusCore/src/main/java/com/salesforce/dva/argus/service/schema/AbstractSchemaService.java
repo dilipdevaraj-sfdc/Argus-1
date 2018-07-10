@@ -27,6 +27,11 @@ import com.salesforce.dva.argus.service.SchemaService;
 import com.salesforce.dva.argus.system.SystemAssert;
 import com.salesforce.dva.argus.system.SystemConfiguration;
 
+/**
+ * Implementation of the abstract schema service class
+ *
+ * @author  Dilip Devaraj (ddevaraj@salesforce.com)
+ */
 public abstract class AbstractSchemaService extends DefaultService implements SchemaService {
 	private static final long POLL_INTERVAL_MS = 10 * 60 * 1000L;
 	private static final int DAY_IN_SECONDS = 24 * 60 * 60;
