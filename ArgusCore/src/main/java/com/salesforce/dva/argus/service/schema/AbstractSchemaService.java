@@ -36,6 +36,11 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 	private static final long POLL_INTERVAL_MS = 10 * 60 * 1000L;
 	private static final int DAY_IN_SECONDS = 24 * 60 * 60;
 	private static final int HOUR_IN_SECONDS = 60 * 60;
+	
+	/* Have two separate bloom filters one for metrics schema and another for scope names schema.
+	 * Since scopes will continue to repeat more often on subsequent kafka batch reads, we can easily check this from the  bloom filter for scopes only. 
+	 * Hence we can avoid the extra call to populate scopenames index on ES in subsequent Kafka reads.
+	 */
 	protected static BloomFilter<CharSequence> bloomFilter;
 	protected static BloomFilter<CharSequence> bloomFilterScopeOnly;
 	private Random rand = new Random();
