@@ -26,7 +26,6 @@ import org.apache.http.impl.nio.conn.PoolingNHttpClientConnectionManager;
 import org.apache.http.impl.nio.reactor.DefaultConnectingIOReactor;
 import org.apache.http.util.EntityUtils;
 import org.elasticsearch.client.Response;
-import org.elasticsearch.client.ResponseListener;
 import org.elasticsearch.client.RestClient;
 import org.elasticsearch.client.RestClientBuilder;
 import org.elasticsearch.client.RestClientBuilder.HttpClientConfigCallback;
@@ -68,7 +67,7 @@ import com.salesforce.dva.argus.system.SystemException;
 public class ElasticSearchSchemaService extends AbstractSchemaService {
 
 	private static final String INDEX_NAME = "metadata_index";
-	private static final String SCOPE_INDEX_NAME = "scopenames2";
+	private static final String SCOPE_INDEX_NAME = "scopenames";
 	private static final String TYPE_NAME = "metadata_type";
 	private static final String SCOPE_TYPE_NAME = "scope_type";
 	private static final String KEEP_SCROLL_CONTEXT_OPEN_FOR = "1m";
@@ -205,11 +204,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 
 		for(List<MetricSchemaRecord> records : fracturedList) {
 			if(!records.isEmpty()) {
-				if(_syncPut) {
-					_upsert(records);
-				} else {
-					_upsertAsync(records);
-				}
+				_upsert(records);
 			}
 		}
 
@@ -238,8 +233,8 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 			count += records.size();
 		}
 
-		 _monitorService.modifyCounter(MonitorService.Counter.SCOPENAMES_WRITTEN, count, null);
-		 _monitorService.modifyCounter(MonitorService.Counter.SCOPENAMES_WRITE_LATENCY, (System.currentTimeMillis() - start), null);
+		_monitorService.modifyCounter(MonitorService.Counter.SCOPENAMES_WRITTEN, count, null);
+		_monitorService.modifyCounter(MonitorService.Counter.SCOPENAMES_WRITE_LATENCY, (System.currentTimeMillis() - start), null);
 
 	}
 
@@ -665,7 +660,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		String strResponse = "";
 
 		ScopeOnlySchemaRecordList scopeOnlySchemaRecordList = new ScopeOnlySchemaRecordList(records, _idgenHashAlgo);
-		
+
 		try {
 			String requestBody = _scopeOnlyMapper.writeValueAsString(scopeOnlySchemaRecordList);
 			Response response = _esRestClient.performRequest(HttpMethod.POST.getName(), requestUrl, Collections.emptyMap(), new StringEntity(requestBody));
@@ -722,67 +717,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		}
 	}
 
-	private void _upsertAsync(List<MetricSchemaRecord> records) {
-
-		String requestUrl = new StringBuilder().append("/")
-				.append(INDEX_NAME)
-				.append("/")
-				.append(TYPE_NAME)
-				.append("/")
-				.append("_bulk")
-				.toString();
-
-		MetricSchemaRecordList msrList = new MetricSchemaRecordList(records, _idgenHashAlgo);
-		StringEntity entity;
-		try {
-			String requestBody = _mapper.writeValueAsString(msrList);
-			entity = new StringEntity(requestBody);
-		} catch (JsonProcessingException | UnsupportedEncodingException e) {
-			throw new SystemException("Failed to parse metrics to schema records when indexing.", e);
-		}
-
-		ResponseListener responseListener = new ResponseListener() {
-
-			@Override
-			public void onSuccess(Response response) {
-				String strResponse = extractResponse(response);
-				try {
-					PutResponse putResponse = new ObjectMapper().readValue(strResponse, PutResponse.class);
-					//TODO: If response contains HTTP 429 Too Many Requests (EsRejectedExecutionException), then retry with exponential back-off.
-					if(putResponse.errors) {
-						List<MetricSchemaRecord> recordsToRemove = new ArrayList<>();
-						for(Item item : putResponse.items) {
-							if(item.create != null && item.create.status != HttpStatus.SC_CONFLICT && item.create.status != HttpStatus.SC_CREATED) {
-								_logger.warn("Failed to index metric. Reason: " + new ObjectMapper().writeValueAsString(item.create.error));
-								recordsToRemove.add(msrList.getRecord(item.create._id));
-							}
-
-							if(item.index != null && item.index.status == HttpStatus.SC_NOT_FOUND) {
-								_logger.warn("Index does not exist. Error: " + new ObjectMapper().writeValueAsString(item.index.error));
-								recordsToRemove.add(msrList.getRecord(item.index._id));
-							}
-						}
-						if(recordsToRemove.size() != 0) {
-							_logger.info("{} records were not written to ES", recordsToRemove.size());
-							records.removeAll(recordsToRemove);
-						}
-					} 
-					//add to bloom filter
-					_addToBloomFilter(records);
-				} catch(IOException e) {
-					_logger.warn("Failed to parse reponse of put metrics. The response was: " + strResponse, e);
-				}
-			}
-
-			@Override
-			public void onFailure(Exception e) {
-				//TODO: Retry with exponential back-off for handling EsRejectedExecutionException/RemoteTransportException/TimeoutException??
-				_logger.warn("Failed to execute the indexing request.", e);
-			}
-		};
-
-		_esRestClient.performRequestAsync(HttpMethod.POST.getName(), requestUrl, Collections.emptyMap(), entity, responseListener);
-	}
 
 	protected void _addToBloomFilter(List<MetricSchemaRecord> records){
 		_logger.info("Adding {} records into bloom filter.", records.size());
@@ -791,7 +725,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 			bloomFilter.put(key);		
 		}		
 	}
-	
+
 	protected void _addToBloomFilterScopeOnly(List<ScopeOnlySchemaRecord> records){
 		_logger.info("Adding {} records into scope only bloom filter.", records.size());
 		for(ScopeOnlySchemaRecord record : records) {		
@@ -1140,7 +1074,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		fieldNode.put("type", type);
 		return fieldNode;
 	}
-	
+
 	private void _createIndexIfNotExists() {
 		try {
 			Response response = _esRestClient.performRequest(HttpMethod.HEAD.getName(), "/" + INDEX_NAME);
