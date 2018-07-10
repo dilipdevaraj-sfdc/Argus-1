@@ -68,7 +68,7 @@ import com.salesforce.dva.argus.system.SystemException;
 public class ElasticSearchSchemaService extends AbstractSchemaService {
 
 	private static final String INDEX_NAME = "metadata_index";
-	private static final String SCOPE_INDEX_NAME = "scopenames";
+	private static final String SCOPE_INDEX_NAME = "scopenames2";
 	private static final String TYPE_NAME = "metadata_type";
 	private static final String SCOPE_TYPE_NAME = "scope_type";
 	private static final String KEEP_SCROLL_CONTEXT_OPEN_FOR = "1m";
@@ -1091,7 +1091,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		propertiesNode.put(RecordType.TAGV.getName(), _createFieldNode(FIELD_TYPE_TEXT));
 		propertiesNode.put(RecordType.NAMESPACE.getName(), _createFieldNode(FIELD_TYPE_TEXT));
 
-		propertiesNode.put("mts", _createFieldNode(FIELD_TYPE_DATE));
+		propertiesNode.put("mts", _createFieldNodeNoAnalyzer(FIELD_TYPE_DATE));
 
 		ObjectNode typeNode = mapper.createObjectNode();
 		typeNode.put("properties", propertiesNode);
