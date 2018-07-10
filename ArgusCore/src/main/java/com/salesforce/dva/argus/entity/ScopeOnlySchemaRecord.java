@@ -132,7 +132,7 @@ public class ScopeOnlySchemaRecord {
 		return new ScopeOnlySchemaRecord(scope);
 	}
 
-	public static String print(MetricSchemaRecord msr) {
+	public static String print(ScopeOnlySchemaRecord msr) {
 		StringBuilder sb = new StringBuilder(msr.getScope());
 		return sb.toString();
 	}

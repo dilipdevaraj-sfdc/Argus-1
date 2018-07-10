@@ -41,8 +41,8 @@ public class ScopeOnlySchemaRecordList {
 		setScrollID(scrollID);
 	}
 	
-	public ScopeOnlySchemaRecordList(List<MetricSchemaRecord> records, HashAlgorithm algorithm) {
-		for(MetricSchemaRecord record : records) {
+	public ScopeOnlySchemaRecordList(List<ScopeOnlySchemaRecord> records, HashAlgorithm algorithm) {
+		for(ScopeOnlySchemaRecord record : records) {
 			String id = null;
 			String scopeOnly = ScopeOnlySchemaRecord.print(record);
 			if(HashAlgorithm.MD5.equals(algorithm)) {

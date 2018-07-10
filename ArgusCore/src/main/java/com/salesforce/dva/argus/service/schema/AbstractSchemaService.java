@@ -209,6 +209,16 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 
 		return sb.toString();
 	}
+	
+	protected String constructScopeOnlyKey(String scope) {
+		StringBuilder sb = new StringBuilder(scope);
+
+		// Add randomness for each instance of bloom filter running on different 
+		// schema clients to reduce probability of false positives that metric schemas are not written to ES
+		sb.append('\0').append(randomNumber);
+
+		return sb.toString();
+	}
 
 	private void createScheduledExecutorService(int targetHourToStartAt){
 		scheduledExecutorService = Executors.newScheduledThreadPool(1);
