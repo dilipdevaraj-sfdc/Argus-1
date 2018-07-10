@@ -1081,7 +1081,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 
 	}
 
-
 	private ObjectNode _createMappingsNode() {
 		ObjectMapper mapper = new ObjectMapper();
 
@@ -1109,7 +1108,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		ObjectNode propertiesNode = mapper.createObjectNode();
 		propertiesNode.put(RecordType.SCOPE.getName(), _createFieldNode(FIELD_TYPE_TEXT));
 
-		propertiesNode.put("mts", _createFieldNode(FIELD_TYPE_DATE));
+		propertiesNode.put("mts", _createFieldNodeNoAnalyzer(FIELD_TYPE_DATE));
 
 		ObjectNode typeNode = mapper.createObjectNode();
 		typeNode.put("properties", propertiesNode);
@@ -1134,6 +1133,14 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		return fieldNode;
 	}
 
+	private ObjectNode _createFieldNodeNoAnalyzer(String type) {
+		ObjectMapper mapper = new ObjectMapper();
+
+		ObjectNode fieldNode = mapper.createObjectNode();
+		fieldNode.put("type", type);
+		return fieldNode;
+	}
+	
 	private void _createIndexIfNotExists() {
 		try {
 			Response response = _esRestClient.performRequest(HttpMethod.HEAD.getName(), "/" + INDEX_NAME);
