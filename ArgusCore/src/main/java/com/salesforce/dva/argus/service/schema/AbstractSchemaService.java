@@ -32,10 +32,13 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 	private static final int DAY_IN_SECONDS = 24 * 60 * 60;
 	private static final int HOUR_IN_SECONDS = 60 * 60;
 	protected static BloomFilter<CharSequence> bloomFilter;
+	protected static BloomFilter<CharSequence> bloomFilterScopeOnly;
 	private Random rand = new Random();
 	private int randomNumber = rand.nextInt();
 	private int bloomFilterExpectedNumberInsertions;
 	private double bloomFilterErrorRate;
+	private int bloomFilterScopeOnlyExpectedNumberInsertions;
+	private double bloomFilterScopeOnlyErrorRate;	
 	private final Logger _logger = LoggerFactory.getLogger(getClass());
 	private final Thread _bloomFilterMonitorThread;
 	protected final boolean _syncPut;
@@ -49,8 +52,13 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 				Property.BLOOMFILTER_EXPECTED_NUMBER_INSERTIONS.getDefaultValue()));
 		bloomFilterErrorRate = Double.parseDouble(config.getValue(Property.BLOOMFILTER_ERROR_RATE.getName(), 
 				Property.BLOOMFILTER_ERROR_RATE.getDefaultValue()));
+		bloomFilterScopeOnlyExpectedNumberInsertions = Integer.parseInt(config.getValue(Property.BLOOMFILTER_SCOPE_ONLY_EXPECTED_NUMBER_INSERTIONS.getName(), 
+				Property.BLOOMFILTER_SCOPE_ONLY_EXPECTED_NUMBER_INSERTIONS.getDefaultValue()));
+		bloomFilterScopeOnlyErrorRate = Double.parseDouble(config.getValue(Property.BLOOMFILTER_SCOPE_ONLY_ERROR_RATE.getName(), 
+				Property.BLOOMFILTER_SCOPE_ONLY_ERROR_RATE.getDefaultValue()));
 		bloomFilter = BloomFilter.create(Funnels.stringFunnel(Charset.defaultCharset()), bloomFilterExpectedNumberInsertions , bloomFilterErrorRate);
-
+		bloomFilterScopeOnly = BloomFilter.create(Funnels.stringFunnel(Charset.defaultCharset()), bloomFilterScopeOnlyExpectedNumberInsertions , bloomFilterScopeOnlyErrorRate);
+		
 		_syncPut = Boolean.parseBoolean(
 				config.getValue(Property.SYNC_PUT.getName(), Property.SYNC_PUT.getDefaultValue()));
 
@@ -78,15 +86,19 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 		// Create a list of metricsToPut that do not exist on the BLOOMFILTER and then call implementation 
 		// specific put with only those subset of metricsToPut. 
 		List<Metric> metricsToPut = new ArrayList<>(metrics.size());
+		List<String> scopesToPut = new ArrayList<>(metrics.size());
 
 		for(Metric metric : metrics) {
+			// check metric schema bloom filter
 			if(metric.getTags().isEmpty()) {
+				// if metric does not have tags
 				String key = constructKey(metric, null);
 				boolean found = bloomFilter.mightContain(key);
 				if(!found) {
 					metricsToPut.add(metric);
 				}
 			} else {
+			    // if metric has tags
 				boolean newTags = false;
 				for(Entry<String, String> tagEntry : metric.getTags().entrySet()) {
 					String key = constructKey(metric, tagEntry);
@@ -100,12 +112,19 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 					metricsToPut.add(metric);
 				}
 			}
+			
+			// Check scope only bloom filter
+			String key = constructScopeOnlyKey(metric);
+			boolean found = bloomFilterScopeOnly.mightContain(key);
+			if(!found) {
+				scopesToPut.add(metric.getScope());
+			}			
 		}
 
-		implementationSpecificPut(metricsToPut);
+		implementationSpecificPut(metricsToPut, scopesToPut);
 	}
 
-	protected abstract void implementationSpecificPut(List<Metric> metrics);
+	protected abstract void implementationSpecificPut(List<Metric> metrics, List<String> scopeNames);
 
 	@Override
 	public void dispose() {
@@ -180,6 +199,16 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 
 		return sb.toString();
 	}
+	
+	protected String constructScopeOnlyKey(Metric metric) {
+		StringBuilder sb = new StringBuilder(metric.getScope());
+
+		// Add randomness for each instance of bloom filter running on different 
+		// schema clients to reduce probability of false positives that metric schemas are not written to ES
+		sb.append('\0').append(randomNumber);
+
+		return sb.toString();
+	}
 
 	private void createScheduledExecutorService(int targetHourToStartAt){
 		scheduledExecutorService = Executors.newScheduledThreadPool(1);
@@ -215,6 +244,8 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 		SYNC_PUT("service.property.schema.sync.put", "false"),
 		BLOOMFILTER_EXPECTED_NUMBER_INSERTIONS("service.property.schema.bloomfilter.expected.number.insertions", "40"),
 		BLOOMFILTER_ERROR_RATE("service.property.schema.bloomfilter.error.rate", "0.00001"),
+		BLOOMFILTER_SCOPE_ONLY_EXPECTED_NUMBER_INSERTIONS("service.property.schema.bloomfilter.scope.only.expected.number.insertions", "40"),
+		BLOOMFILTER_SCOPE_ONLY_ERROR_RATE("service.property.schema.bloomfilter.scope.only.error.rate", "0.00001"),
 		/*
 		 *  Have a different configured flush start hour for different machines to prevent thundering herd problem. 
 		 */
@@ -300,6 +331,7 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 		private void _flushBloomFilter() {
 			_logger.info("Flushing out bloom filter entries");
 			bloomFilter = BloomFilter.create(Funnels.stringFunnel(Charset.defaultCharset()), bloomFilterExpectedNumberInsertions , bloomFilterErrorRate);
+			bloomFilterScopeOnly = BloomFilter.create(Funnels.stringFunnel(Charset.defaultCharset()), bloomFilterScopeOnlyExpectedNumberInsertions , bloomFilterScopeOnlyErrorRate);
 			/* Don't need explicit synchronization to prevent slowness majority of the time*/
 			randomNumber = rand.nextInt();
 		}

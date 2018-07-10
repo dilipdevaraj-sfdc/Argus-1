@@ -49,6 +49,7 @@ import com.salesforce.dva.argus.entity.KeywordQuery;
 import com.salesforce.dva.argus.entity.Metric;
 import com.salesforce.dva.argus.entity.MetricSchemaRecord;
 import com.salesforce.dva.argus.entity.MetricSchemaRecordQuery;
+import com.salesforce.dva.argus.entity.ScopeOnlySchemaRecord;
 import com.salesforce.dva.argus.service.MonitorService;
 import com.salesforce.dva.argus.service.MonitorService.Counter;
 import com.salesforce.dva.argus.service.SchemaService;
@@ -194,7 +195,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 
 
 	@Override
-	protected void implementationSpecificPut(List<Metric> metrics) {
+	protected void implementationSpecificPut(List<Metric> metrics, List<String> scopeNames) {
 		SystemAssert.requireArgument(metrics != null, "Metrics list cannot be null.");
 
 		_logger.info("{} new metrics need to be indexed on ES.", metrics.size());
@@ -219,6 +220,27 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 
 		_monitorService.modifyCounter(MonitorService.Counter.SCHEMARECORDS_WRITTEN, count, null);
 		_monitorService.modifyCounter(MonitorService.Counter.SCHEMARECORDS_WRITE_LATENCY, (System.currentTimeMillis() - start), null);
+		
+		
+		_logger.info("{} new scopes need to be indexed on ES.", scopeNames.size());
+
+		start = System.currentTimeMillis();
+		List<List<ScopeOnlySchemaRecord>> fracturedScopesList = _fractureScopes(scopeNames);
+
+		for(List<ScopeOnlySchemaRecord> records : fracturedScopesList) {
+			if(!records.isEmpty()) {
+					_upsertScopes(records);
+			}
+		}
+
+		count = 0;
+		for(List<ScopeOnlySchemaRecord> records : fracturedScopesList) {
+			count += records.size();
+		}
+
+		// _monitorService.modifyCounter(MonitorService.Counter.SCHEMARECORDS_WRITTEN, count, null);
+		// _monitorService.modifyCounter(MonitorService.Counter.SCHEMARECORDS_WRITE_LATENCY, (System.currentTimeMillis() - start), null);
+		
 	}
 
 	/* Convert the given list of metrics to a list of metric schema records. At the same time, fracture the records list
@@ -254,6 +276,40 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		return fracturedList;
 	}
 
+	
+	/* Convert the given list of metrics to a list of metric schema records. At the same time, fracture the records list
+	 * if its size is greater than INDEXING_BATCH_SIZE.
+	 */
+	protected List<List<ScopeOnlySchemaRecord>> _fractureScopes(List<String> scopeNames) {
+		List<List<ScopeOnlySchemaRecord>> fracturedList = new ArrayList<>();
+
+		List<ScopeOnlySchemaRecord> records = new ArrayList<>(_bulkIndexingSize);
+		for(String scope : scopeNames) {
+			if(metric.getTags().isEmpty()) {
+				MetricSchemaRecord msr = new MetricSchemaRecord(metric.getScope(), metric.getMetric());
+				msr.setNamespace(metric.getNamespace());
+				records.add(msr);
+				if(records.size() == _bulkIndexingSize) {
+					fracturedList.add(records);
+					records = new ArrayList<>(_bulkIndexingSize);
+				}
+				continue;
+			}
+
+			for(Map.Entry<String, String> entry : metric.getTags().entrySet()) {
+				records.add(new MetricSchemaRecord(metric.getNamespace(), metric.getScope(), metric.getMetric(), 
+						entry.getKey(), entry.getValue()));
+				if(records.size() == _bulkIndexingSize) {
+					fracturedList.add(records);
+					records = new ArrayList<>(_bulkIndexingSize);
+				}
+			}
+		}
+
+		fracturedList.add(records);
+		return fracturedList;
+	}
+	
 	@Override
 	public List<MetricSchemaRecord> get(MetricSchemaRecordQuery query) {
 		requireNotDisposed();
@@ -1021,7 +1077,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		ObjectNode propertiesNode = mapper.createObjectNode();
 		propertiesNode.put(RecordType.SCOPE.getName(), _createFieldNode(FIELD_TYPE_TEXT));
 
-	//	propertiesNode.put("mts", _createFieldNode(FIELD_TYPE_DATE));
+		propertiesNode.put("mts", _createFieldNode(FIELD_TYPE_DATE));
 
 		ObjectNode typeNode = mapper.createObjectNode();
 		typeNode.put("properties", propertiesNode);
