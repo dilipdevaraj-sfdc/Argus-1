@@ -667,7 +667,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		ScopeOnlySchemaRecordList scopeOnlySchemaRecordList = new ScopeOnlySchemaRecordList(records, _idgenHashAlgo);
 		
 		try {
-			String requestBody = _mapper.writeValueAsString(scopeOnlySchemaRecordList);
+			String requestBody = _scopeOnlyMapper.writeValueAsString(scopeOnlySchemaRecordList);
 			Response response = _esRestClient.performRequest(HttpMethod.POST.getName(), requestUrl, Collections.emptyMap(), new StringEntity(requestBody));
 			strResponse = extractResponse(response);
 		} catch (IOException e) {
