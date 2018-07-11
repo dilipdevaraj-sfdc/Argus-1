@@ -36,7 +36,7 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 	private static final long POLL_INTERVAL_MS = 10 * 60 * 1000L;
 	private static final int DAY_IN_SECONDS = 24 * 60 * 60;
 	private static final int HOUR_IN_SECONDS = 60 * 60;
-	
+
 	/* Have two separate bloom filters one for metrics schema and another for scope names schema.
 	 * Since scopes will continue to repeat more often on subsequent kafka batch reads, we can easily check this from the  bloom filter for scopes only. 
 	 * Hence we can avoid the extra call to populate scopenames index on ES in subsequent Kafka reads.
@@ -68,7 +68,7 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 				Property.BLOOMFILTER_SCOPE_ONLY_ERROR_RATE.getDefaultValue()));
 		bloomFilter = BloomFilter.create(Funnels.stringFunnel(Charset.defaultCharset()), bloomFilterExpectedNumberInsertions , bloomFilterErrorRate);
 		bloomFilterScopeOnly = BloomFilter.create(Funnels.stringFunnel(Charset.defaultCharset()), bloomFilterScopeOnlyExpectedNumberInsertions , bloomFilterScopeOnlyErrorRate);
-		
+
 		_syncPut = Boolean.parseBoolean(
 				config.getValue(Property.SYNC_PUT.getName(), Property.SYNC_PUT.getDefaultValue()));
 
@@ -84,7 +84,6 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 	public void put(Metric metric) {
 		requireNotDisposed();
 		SystemAssert.requireArgument(metric != null, "Metric cannot be null.");
-
 		put(Arrays.asList(metric));
 	}
 
@@ -108,7 +107,7 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 					metricsToPut.add(metric);
 				}
 			} else {
-			    // if metric has tags
+				// if metric has tags
 				boolean newTags = false;
 				for(Entry<String, String> tagEntry : metric.getTags().entrySet()) {
 					String key = constructKey(metric, tagEntry);
@@ -122,7 +121,7 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 					metricsToPut.add(metric);
 				}
 			}
-			
+
 			// Check scope only bloom filter
 			String key = constructScopeOnlyKey(metric);
 			boolean found = bloomFilterScopeOnly.mightContain(key);
@@ -134,6 +133,12 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 		implementationSpecificPut(metricsToPut, scopesToPut);
 	}
 
+	/*
+	 * Calls the implementation specific write for indexing the records
+	 *
+	 * @param  metrics    The metrics metadata that will be written to a separate index.
+	 * @param  scopeNames The scope names that that will be written to a separate index.
+	 */
 	protected abstract void implementationSpecificPut(List<Metric> metrics, List<String> scopeNames);
 
 	@Override
@@ -209,7 +214,7 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 
 		return sb.toString();
 	}
-	
+
 	protected String constructScopeOnlyKey(Metric metric) {
 		StringBuilder sb = new StringBuilder(metric.getScope());
 
@@ -219,7 +224,7 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 
 		return sb.toString();
 	}
-	
+
 	protected String constructScopeOnlyKey(String scope) {
 		StringBuilder sb = new StringBuilder(scope);
 
@@ -323,8 +328,10 @@ public abstract class AbstractSchemaService extends DefaultService implements Sc
 		}
 
 		private void _checkBloomFilterUsage() {
-			_logger.info("Bloom approx no. elements = {}", bloomFilter.approximateElementCount());
-			_logger.info("Bloom expected error rate = {}", bloomFilter.expectedFpp());
+			_logger.info("Metrics Bloom approx no. elements = {}", bloomFilter.approximateElementCount());
+			_logger.info("Metrics Bloom expected error rate = {}", bloomFilter.expectedFpp());
+			_logger.info("Scope only Bloom approx no. elements = {}", bloomFilterScopeOnly.approximateElementCount());
+			_logger.info("Scope only Bloom expected error rate = {}", bloomFilterScopeOnly.expectedFpp());			
 		}
 
 		private void _sleepForPollPeriod() {
