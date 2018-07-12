@@ -988,7 +988,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		return mapper;
 	}
 
-	private ObjectNode _createSettingsNode() {
+	private ObjectNode _createSettingsNode(int replicationFactor, int numShards) {
 		ObjectMapper mapper = new ObjectMapper();
 
 		ObjectNode metadataAnalyzer = mapper.createObjectNode();
@@ -1007,8 +1007,8 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 
 		ObjectNode indexNode = mapper.createObjectNode();
 		indexNode.put("max_result_window", INDEX_MAX_RESULT_WINDOW);
-		indexNode.put("number_of_replicas", _replicationFactor);
-		indexNode.put("number_of_shards", _numShards);
+		indexNode.put("number_of_replicas", replicationFactor);
+		indexNode.put("number_of_shards", numShards);
 
 		ObjectNode settingsNode = mapper.createObjectNode();
 		settingsNode.put("analysis", analysisNode);
@@ -1036,34 +1036,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		mappingsNode.put(TYPE_NAME, typeNode);
 		return mappingsNode;
 	}
-
-	private ObjectNode _createScopeSettingsNode() {
-		ObjectMapper mapper = new ObjectMapper();
-
-		ObjectNode metadataAnalyzer = mapper.createObjectNode();
-		metadataAnalyzer.put("tokenizer", "metadata_tokenizer");
-		metadataAnalyzer.put("filter", mapper.createArrayNode().add("lowercase"));
-
-		ObjectNode analyzerNode = mapper.createObjectNode();
-		analyzerNode.put("metadata_analyzer", metadataAnalyzer);
-
-		ObjectNode tokenizerNode = mapper.createObjectNode();
-		tokenizerNode.put("metadata_tokenizer", mapper.createObjectNode().put("type", "pattern").put("pattern", "([^\\p{L}\\d]+)|(?<=[\\p{L}&&[^\\p{Lu}]])(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}[\\p{L}&&[^\\p{Lu}]])"));
-
-		ObjectNode analysisNode = mapper.createObjectNode();
-		analysisNode.put("analyzer", analyzerNode);
-		analysisNode.put("tokenizer", tokenizerNode);
-
-		ObjectNode indexNode = mapper.createObjectNode();
-		indexNode.put("max_result_window", INDEX_MAX_RESULT_WINDOW);
-		indexNode.put("number_of_replicas", _replicationFactorForScopeIndex);
-		indexNode.put("number_of_shards", _numShardsForScopeIndex);
-
-		ObjectNode settingsNode = mapper.createObjectNode();
-		settingsNode.put("analysis", analysisNode);
-		settingsNode.put("index", indexNode);
-		return settingsNode;
-	}	
 
 	private ObjectNode _createScopeMappingsNode() {
 		ObjectMapper mapper = new ObjectMapper();
@@ -1114,7 +1086,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 				ObjectMapper mapper = new ObjectMapper();
 
 				ObjectNode rootNode = mapper.createObjectNode();
-				rootNode.put("settings", _createSettingsNode());
+				rootNode.put("settings", _createSettingsNode(_replicationFactor, _numShards));
 				rootNode.put("mappings", _createMappingsNode());
 
 				String settingsAndMappingsJson = rootNode.toString();
@@ -1138,7 +1110,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 				ObjectMapper mapper = new ObjectMapper();
 
 				ObjectNode rootNode = mapper.createObjectNode();
-				rootNode.put("settings", _createScopeSettingsNode());
+				rootNode.put("settings", _createSettingsNode(_replicationFactorForScopeIndex, _numShardsForScopeIndex));
 				rootNode.put("mappings", _createScopeMappingsNode());
 
 				String settingsAndMappingsJson = rootNode.toString();
