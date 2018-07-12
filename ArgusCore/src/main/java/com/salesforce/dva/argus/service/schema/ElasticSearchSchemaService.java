@@ -52,6 +52,7 @@ import com.salesforce.dva.argus.entity.ScopeOnlySchemaRecord;
 import com.salesforce.dva.argus.service.MonitorService;
 import com.salesforce.dva.argus.service.MonitorService.Counter;
 import com.salesforce.dva.argus.service.SchemaService;
+import com.salesforce.dva.argus.service.schema.AsyncHbaseSchemaService.Property;
 import com.salesforce.dva.argus.service.schema.ElasticSearchSchemaService.PutResponse.Item;
 import com.salesforce.dva.argus.service.schema.MetricSchemaRecordList.HashAlgorithm;
 import com.salesforce.dva.argus.system.SystemAssert;
@@ -66,10 +67,10 @@ import com.salesforce.dva.argus.system.SystemException;
 @Singleton
 public class ElasticSearchSchemaService extends AbstractSchemaService {
 
+	private static String SCOPE_INDEX_NAME;
+	private static String SCOPE_TYPE_NAME;
 	private static final String INDEX_NAME = "metadata_index";
-	private static final String SCOPE_INDEX_NAME = "scopenames";
 	private static final String TYPE_NAME = "metadata_type";
-	private static final String SCOPE_TYPE_NAME = "scope_type";
 	private static final String KEEP_SCROLL_CONTEXT_OPEN_FOR = "1m";
 	private static final int INDEX_MAX_RESULT_WINDOW = 10000;
 	private static final int MAX_RETRY_TIMEOUT = 300 * 1000;
@@ -84,6 +85,8 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 	private final RestClient _esRestClient;
 	private final int _replicationFactor;
 	private final int _numShards;
+	private final int _replicationFactorForScopeIndex;
+	private final int _numShardsForScopeIndex;	
 	private final int _bulkIndexingSize;
 	private HashAlgorithm _idgenHashAlgo;
 
@@ -95,6 +98,10 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		_mapper = _createObjectMapper();
 		_scopeOnlyMapper = _createScopeOnlyObjectMapper();
 
+		SCOPE_INDEX_NAME = config.getValue(Property.ELASTICSEARCH_SCOPE_INDEX_NAME.getName(), 
+				Property.ELASTICSEARCH_SCOPE_INDEX_NAME.getDefaultValue());
+		SCOPE_TYPE_NAME = config.getValue(Property.ELASTICSEARCH_SCOPE_TYPE_NAME.getName(), 
+				Property.ELASTICSEARCH_SCOPE_TYPE_NAME.getDefaultValue());
 		String algorithm = config.getValue(Property.ELASTICSEARCH_IDGEN_HASH_ALGO.getName(), Property.ELASTICSEARCH_IDGEN_HASH_ALGO.getDefaultValue());
 		try {
 			_idgenHashAlgo = HashAlgorithm.fromString(algorithm);
@@ -110,6 +117,12 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 
 		_numShards = Integer.parseInt(
 				config.getValue(Property.ELASTICSEARCH_SHARDS_COUNT.getName(), Property.ELASTICSEARCH_SHARDS_COUNT.getDefaultValue()));
+
+		_replicationFactorForScopeIndex = Integer.parseInt(
+				config.getValue(Property.ELASTICSEARCH_NUM_REPLICAS_FOR_SCOPE_INDEX.getName(), Property.ELASTICSEARCH_NUM_REPLICAS_FOR_SCOPE_INDEX.getDefaultValue()));
+
+		_numShardsForScopeIndex = Integer.parseInt(
+				config.getValue(Property.ELASTICSEARCH_SHARDS_COUNT_FOR_SCOPE_INDEX.getName(), Property.ELASTICSEARCH_SHARDS_COUNT_FOR_SCOPE_INDEX.getDefaultValue()));
 
 		_bulkIndexingSize = Integer.parseInt(
 				config.getValue(Property.ELASTICSEARCH_INDEXING_BATCH_SIZE.getName(), Property.ELASTICSEARCH_INDEXING_BATCH_SIZE.getDefaultValue()));
@@ -884,7 +897,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		return queryNode;
 	}
 
-
 	private ObjectNode _constructAggsNode(RecordType type, long limit, ObjectMapper mapper) {
 
 		ObjectNode termsNode = mapper.createObjectNode();
@@ -984,7 +996,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		return mapper;
 	}
 
-
 	private ObjectNode _createSettingsNode() {
 		ObjectMapper mapper = new ObjectMapper();
 
@@ -1012,7 +1023,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		settingsNode.put("index", indexNode);
 
 		return settingsNode;
-
 	}
 
 	private ObjectNode _createMappingsNode() {
@@ -1032,9 +1042,36 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 
 		ObjectNode mappingsNode = mapper.createObjectNode();
 		mappingsNode.put(TYPE_NAME, typeNode);
-
 		return mappingsNode;
 	}
+
+	private ObjectNode _createScopeSettingsNode() {
+		ObjectMapper mapper = new ObjectMapper();
+
+		ObjectNode metadataAnalyzer = mapper.createObjectNode();
+		metadataAnalyzer.put("tokenizer", "metadata_tokenizer");
+		metadataAnalyzer.put("filter", mapper.createArrayNode().add("lowercase"));
+
+		ObjectNode analyzerNode = mapper.createObjectNode();
+		analyzerNode.put("metadata_analyzer", metadataAnalyzer);
+
+		ObjectNode tokenizerNode = mapper.createObjectNode();
+		tokenizerNode.put("metadata_tokenizer", mapper.createObjectNode().put("type", "pattern").put("pattern", "([^\\p{L}\\d]+)|(?<=[\\p{L}&&[^\\p{Lu}]])(?=\\p{Lu})|(?<=\\p{Lu})(?=\\p{Lu}[\\p{L}&&[^\\p{Lu}]])"));
+
+		ObjectNode analysisNode = mapper.createObjectNode();
+		analysisNode.put("analyzer", analyzerNode);
+		analysisNode.put("tokenizer", tokenizerNode);
+
+		ObjectNode indexNode = mapper.createObjectNode();
+		indexNode.put("max_result_window", INDEX_MAX_RESULT_WINDOW);
+		indexNode.put("number_of_replicas", _replicationFactorForScopeIndex);
+		indexNode.put("number_of_shards", _numShardsForScopeIndex);
+
+		ObjectNode settingsNode = mapper.createObjectNode();
+		settingsNode.put("analysis", analysisNode);
+		settingsNode.put("index", indexNode);
+		return settingsNode;
+	}	
 
 	private ObjectNode _createScopeMappingsNode() {
 		ObjectMapper mapper = new ObjectMapper();
@@ -1109,7 +1146,7 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 				ObjectMapper mapper = new ObjectMapper();
 
 				ObjectNode rootNode = mapper.createObjectNode();
-				rootNode.put("settings", _createSettingsNode());
+				rootNode.put("settings", _createScopeSettingsNode());
 				rootNode.put("mappings", _createScopeMappingsNode());
 
 				String settingsAndMappingsJson = rootNode.toString();
@@ -1171,12 +1208,20 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		ELASTICSEARCH_NUM_REPLICAS("service.property.schema.elasticsearch.num.replicas", "1"),
 		/** Shard count for metadata_index. */
 		ELASTICSEARCH_SHARDS_COUNT("service.property.schema.elasticsearch.shards.count", "10"),
+		/** Replication factor for scopenames */
+		ELASTICSEARCH_NUM_REPLICAS_FOR_SCOPE_INDEX("service.property.schema.elasticsearch.num.replicas.for.scope.index", "1"),
+		/** Shard count for scopenames */
+		ELASTICSEARCH_SHARDS_COUNT_FOR_SCOPE_INDEX("service.property.schema.elasticsearch.shards.count.for.scope.index", "10"),
 		/** The no. of records to batch for bulk indexing requests.
 		 * https://www.elastic.co/guide/en/elasticsearch/guide/current/indexing-performance.html#_using_and_sizing_bulk_requests 
 		 */
 		ELASTICSEARCH_INDEXING_BATCH_SIZE("service.property.schema.elasticsearch.indexing.batch.size", "10000"),
 		/** The hashing algorithm to use for generating document id. */
-		ELASTICSEARCH_IDGEN_HASH_ALGO("service.property.schema.elasticsearch.idgen.hash.algo", "MD5");
+		ELASTICSEARCH_IDGEN_HASH_ALGO("service.property.schema.elasticsearch.idgen.hash.algo", "MD5"),
+		/** Name of scope only index */
+		ELASTICSEARCH_SCOPE_INDEX_NAME("service.property.schema.elasticsearch.scope.index.name", "scopenames"),
+		/** Type within scope only index */
+		ELASTICSEARCH_SCOPE_TYPE_NAME("service.property.schema.elasticsearch.scope.type.name", "scope_type");
 
 		private final String _name;
 		private final String _defaultValue;
