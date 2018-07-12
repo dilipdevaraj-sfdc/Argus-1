@@ -194,7 +194,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		}
 	}
 
-
 	@Override
 	public Properties getServiceProperties() {
 		Properties serviceProps = new Properties();
@@ -204,7 +203,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		}
 		return serviceProps;
 	}
-
 
 	@Override
 	protected void implementationSpecificPut(List<Metric> metrics, List<String> scopeNames) {
@@ -229,7 +227,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		_monitorService.modifyCounter(MonitorService.Counter.SCHEMARECORDS_WRITTEN, count, null);
 		_monitorService.modifyCounter(MonitorService.Counter.SCHEMARECORDS_WRITE_LATENCY, (System.currentTimeMillis() - start), null);
 
-
 		_logger.info("{} new scopes need to be indexed on ES.", scopeNames.size());
 
 		start = System.currentTimeMillis();
@@ -248,7 +245,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 
 		_monitorService.modifyCounter(MonitorService.Counter.SCOPENAMES_WRITTEN, count, null);
 		_monitorService.modifyCounter(MonitorService.Counter.SCOPENAMES_WRITE_LATENCY, (System.currentTimeMillis() - start), null);
-
 	}
 
 	/* Convert the given list of metrics to a list of metric schema records. At the same time, fracture the records list
@@ -283,7 +279,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		fracturedList.add(records);
 		return fracturedList;
 	}
-
 
 	/* Convert the given list of scopes to a list of scope only schema records. At the same time, fracture the records list
 	 * if its size is greater than INDEXING_BATCH_SIZE.
@@ -580,7 +575,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 		}
 	}
 
-
 	private List<String> _analyzedTokens(String query) {
 
 		if(!SchemaService.containsFilter(query)) {
@@ -608,7 +602,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 			throw new SystemException(e);
 		}
 	}
-
 
 	private void _upsert(List<MetricSchemaRecord> records) {
 		String requestUrl = new StringBuilder().append("/")
@@ -729,7 +722,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 			throw new SystemException("Failed to parse reponse of put metrics. The response was: " + strResponse, e);
 		}
 	}
-
 
 	protected void _addToBloomFilter(List<MetricSchemaRecord> records){
 		_logger.info("Adding {} records into bloom filter.", records.size());
@@ -1249,7 +1241,6 @@ public class ElasticSearchSchemaService extends AbstractSchemaService {
 			return _defaultValue;
 		}
 	}
-
 
 	static class PutResponse {
 		private int took;
