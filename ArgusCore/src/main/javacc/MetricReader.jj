@@ -575,6 +575,7 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
   	Aggregator downsampler = null;
   	Long downsamplingPeriod = null;
   	String downsampleTokenStr = null;
+  	String percentile = null;
 }
 { 	
   	startTimestamp = getTime(relativeTo)<COLON>
@@ -590,10 +591,15 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
 			downsamplingPeriod = downsampleTokenStr != null ? getDownsamplingPeriod(downsampleTokenStr): null;
 			endTimestamp = endTimestamp == null ? relativeTo : endTimestamp;
 	        MetricQuery query = new MetricQuery(scope, metric, tags, startTimestamp, endTimestamp);
+	        if(namespace!=null && namespace.startsWith("percentile")){
+	        	percentile = namespace;
+	        	namespace = "";
+	        }
 	        query.setNamespace(namespace);
 	        query.setAggregator(aggregator);
 	        query.setDownsampler(downsampler);
 	        query.setDownsamplingPeriod(downsamplingPeriod);
+            query.setPercentile(percentile);
 	        List<MetricQuery> queries = discoveryService.getMatchingQueries(query);
 	        return (List<T>) queries;
 	  	} else if(Metric.class.equals(clazz)) {
@@ -604,10 +610,15 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
 				downsamplingPeriod = downsampleTokenStr != null ? getDownsamplingPeriod(downsampleTokenStr): null;
 				endTimestamp = endTimestamp == null ? relativeTo : endTimestamp;
 		        MetricQuery query = new MetricQuery(scope, metric, tags, startTimestamp, endTimestamp);
+		        if(namespace!=null && namespace.startsWith("percentile")){
+                        percentile = namespace;
+                        namespace = "";
+                }
 		        query.setNamespace(namespace);
 		        query.setAggregator(aggregator);
 		        query.setDownsampler(downsampler);
 		        query.setDownsamplingPeriod(downsamplingPeriod);
+		        query.setPercentile(percentile);
 		        setQueryTimeWindow(query);
 		        List<MetricQuery> queries = discoveryService.getMatchingQueries(query);
 		        

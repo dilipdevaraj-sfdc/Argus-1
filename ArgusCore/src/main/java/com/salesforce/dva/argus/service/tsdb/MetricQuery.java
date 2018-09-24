@@ -59,6 +59,7 @@ public class MetricQuery extends AnnotationQuery {
 	private Aggregator _downsampler;
 	private Long _downsamplingPeriod;
 	private MetricQueryContext _metricQueryContext;
+	private String _percentile;
 
 	//~ Constructors *********************************************************************************************************************************
 
@@ -121,6 +122,15 @@ public class MetricQuery extends AnnotationQuery {
 	}
 
 	/**
+	 * Sets the query percentile. (Used to only retrieve histogram data)
+	 *
+	 * @param  namespace  The namespace.  May be null.
+	 */
+	public void setPercentile(String percentile) {
+		_percentile = percentile;
+	}
+	
+	/**
 	 * Returns the method used to aggregate query results.
 	 *
 	 * @return  The aggregator method used.
@@ -147,6 +157,15 @@ public class MetricQuery extends AnnotationQuery {
 		return _downsampler;
 	}
 
+	/**
+	 * Returns the query percentile.
+	 *
+	 * @return  query percentile.
+	 */
+	public String getPercentile() {
+		return _percentile;
+	}
+	
 	/**
 	 * Sets the method used to downsample the query results.
 	 *
@@ -280,6 +299,11 @@ public class MetricQuery extends AnnotationQuery {
 		if (getDownsampler() != null) {
 			sb.append(getDownsamplingPeriod()).append("ms").append("-").append(getDownsampler().getDescription()).append(":");
 		}
+		
+		if (getPercentile() != null) {
+			sb.append(getPercentile()).append(":");
+		}
+		
 		sb.append(getTSDBMetricName());
 
 		Map<String, String> tags = new HashMap<>(getTags());
