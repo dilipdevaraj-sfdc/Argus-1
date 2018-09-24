@@ -107,104 +107,119 @@ public class DefaultTSDBService extends AbstractTSDBService{
 
 	/** @see  TSDBService#getMetrics(java.util.List) */
 	@Override
-    public Map<MetricQuery, List<Metric>> getMetrics(List<MetricQuery> queries) {
-        requireNotDisposed();
-        requireArgument(queries != null, "Metric Queries cannot be null.");
-        _logger.trace("Active Threads in the pool = " + ((ThreadPoolExecutor) _executorService).getActiveCount());
+	public Map<MetricQuery, List<Metric>> getMetrics(List<MetricQuery> queries) {
+		requireNotDisposed();
+		requireArgument(queries != null, "Metric Queries cannot be null.");
+		_logger.trace("Active Threads in the pool = " + ((ThreadPoolExecutor) _executorService).getActiveCount());
 
-        long start = System.currentTimeMillis();
-        Map<MetricQuery, List<Metric>> metricsMap = new HashMap<>();
-        Map<MetricQuery, Future<List<Metric>>> futures = new HashMap<>();
-        Map<MetricQuery, Long> queryStartExecutionTime = new HashMap<>();
-        // Only one endpoint for DefaultTSDBService
-        String requestUrl = _readEndPoints.get(0) + "/api/query";
+		int noFailedQueries = 0;
+		Exception lastFailedException = null;
+		MetricQuery failedMetricQuery = null;
+		long start = System.currentTimeMillis();
+		Map<MetricQuery, List<Metric>> metricsMap = new HashMap<>();
+		Map<MetricQuery, Future<List<Metric>>> futures = new HashMap<>();
+		Map<MetricQuery, Long> queryStartExecutionTime = new HashMap<>();
+		// Only one endpoint for DefaultTSDBService
+		String requestUrl = _readEndPoints.get(0) + "/api/query";
 
-        for (MetricQuery query : queries) {
-        	String requestBody = fromEntity(query);
-            futures.put(query, _executorService.submit(new QueryWorker(requestUrl, _readEndPoints.get(0), requestBody)));
-            queryStartExecutionTime.put(query, System.currentTimeMillis());
-        }
-        for (Entry<MetricQuery, Future<List<Metric>>> entry : futures.entrySet()) {
-            try {
-                List<Metric> m = entry.getValue().get();
-                List<Metric> metrics = new ArrayList<>();
+		for (MetricQuery query : queries) {
+			String requestBody = fromEntity(query);
+			futures.put(query, _executorService.submit(new QueryWorker(requestUrl, _readEndPoints.get(0), requestBody)));
+			queryStartExecutionTime.put(query, System.currentTimeMillis());
+		}
 
-                if (m != null) {
-                    for (Metric metric : m) {
-                        if (metric != null) {
-                            metric.setQuery(entry.getKey());
-                            metrics.add(metric);
-                        }
-                    }
-                }
-                
-                instrumentQueryLatency(_monitorService, entry.getKey(), queryStartExecutionTime.get(entry.getKey()), "metrics");
-                metricsMap.put(entry.getKey(), metrics);
-            } catch (InterruptedException | ExecutionException e) {
-                throw new SystemException("Failed to get metrics. The query was: " + entry.getKey() + "\\n", e);
-            }
-        }
-        _logger.debug("Time to get Metrics = " + (System.currentTimeMillis() - start));
-        return metricsMap;
-    }
+
+		for (Entry<MetricQuery, Future<List<Metric>>> entry : futures.entrySet()) {
+			try {
+				List<Metric> m = entry.getValue().get();
+				List<Metric> metrics = new ArrayList<>();
+
+				if (m != null) {
+					for (Metric metric : m) {
+						if (metric != null) {
+							metric.setQuery(entry.getKey());
+							metrics.add(metric);
+						}
+					}
+				}
+
+				instrumentQueryLatency(_monitorService, entry.getKey(), queryStartExecutionTime.get(entry.getKey()), "metrics");
+				metricsMap.put(entry.getKey(), metrics);
+			} catch (ExecutionException e) {
+				lastFailedException = e;
+				failedMetricQuery  = entry.getKey();
+				noFailedQueries ++;
+				continue;
+			} catch (InterruptedException ex) {
+				throw new SystemException("Failed to get metrics. The query was: " + entry.getKey() + "\\n", ex);
+			}
+		}
+
+		if(noFailedQueries !=0 && noFailedQueries == queries.size()){
+			throw new SystemException("Failed to get metrics. The query was: " + failedMetricQuery  + "\\n", lastFailedException);
+		}
+
+		_logger.debug("Time to get Metrics = " + (System.currentTimeMillis() - start));
+		return metricsMap;
+	}
 
 	/** @see  TSDBService#getAnnotations(java.util.List) */
 	@Override
-    public List<Annotation> getAnnotations(List<AnnotationQuery> queries) {
-        requireNotDisposed();
-        requireArgument(queries != null, "Annotation queries cannot be null.");
+	public List<Annotation> getAnnotations(List<AnnotationQuery> queries) {
+		requireNotDisposed();
+		requireArgument(queries != null, "Annotation queries cannot be null.");
 
-        List<Annotation> annotations = new ArrayList<>();
-        String pattern = _readEndPoints.get(0) + "/api/query?{0}";
+		List<Annotation> annotations = new ArrayList<>();
+		String pattern = _readEndPoints.get(0) + "/api/query?{0}";
 
-        try {
-        	for (AnnotationQuery query : queries) {
-            	long start = System.currentTimeMillis();
-                String requestUrl = MessageFormat.format(pattern, query.toString());
-                HttpResponse response = executeHttpRequest(HttpMethod.GET, requestUrl, _readPortMap.get(_readEndPoints.get(0)), null);
-                List<AnnotationWrapper> wrappers = toEntity(extractResponse(response), new TypeReference<AnnotationWrappers>() { });
-                if (wrappers != null) {
-                    for (AnnotationWrapper wrapper : wrappers) {
-                        for (Annotation existing : wrapper.getAnnotations()) {
-                            String source = existing.getSource();
-                            String id = existing.getId();
-                            String type = query.getType();
-                            String scope = query.getScope();
-                            String metric = query.getMetric();
-			    
-                            //Convert all timestamps to millis, so that we can compare them
-                            long timestamp = existing.getTimestamp();
-                            if(String.valueOf(timestamp).length() < 12) {
-                            	timestamp = timestamp * 1000;
-                            }
-                            
-                            long queryStart = query.getStartTimestamp();
-                            long queryEnd = query.getEndTimestamp();
-                            if(String.valueOf(queryStart).length() < 12) {
-                            	queryStart = queryStart * 1000;
-                            }
-                            
-                            if(String.valueOf(queryEnd).length() < 12) {
-                            	queryEnd = queryEnd * 1000;
-                            }
-                            
-                            if(timestamp > queryStart && timestamp <= queryEnd) {
-                            	Annotation updated = new Annotation(source, id, type, scope, metric, timestamp);
-                                updated.setFields(existing.getFields());
-                                updated.setTags(query.getTags());
-                                annotations.add(updated);
-                            }
-                        }
-                    }
-                }
-                instrumentQueryLatency(_monitorService, query, start, "annotations");
-            }
-        } catch(IOException ex) {
-        	throw new SystemException(ex);
-        }
-        
-        return annotations;
-    }
+		try {
+			for (AnnotationQuery query : queries) {
+				long start = System.currentTimeMillis();
+				String requestUrl = MessageFormat.format(pattern, query.toString());
+				HttpResponse response = executeHttpRequest(HttpMethod.GET, requestUrl, _readPortMap.get(_readEndPoints.get(0)), null);
+				List<AnnotationWrapper> wrappers = toEntity(extractResponse(response), new TypeReference<AnnotationWrappers>() { });
+				if (wrappers != null) {
+					for (AnnotationWrapper wrapper : wrappers) {
+						for (Annotation existing : wrapper.getAnnotations()) {
+							String source = existing.getSource();
+							String id = existing.getId();
+							String type = query.getType();
+							String scope = query.getScope();
+							String metric = query.getMetric();
+
+							//Convert all timestamps to millis, so that we can compare them
+							long timestamp = existing.getTimestamp();
+							if(String.valueOf(timestamp).length() < 12) {
+								timestamp = timestamp * 1000;
+							}
+
+							long queryStart = query.getStartTimestamp();
+							long queryEnd = query.getEndTimestamp();
+							if(String.valueOf(queryStart).length() < 12) {
+								queryStart = queryStart * 1000;
+							}
+
+							if(String.valueOf(queryEnd).length() < 12) {
+								queryEnd = queryEnd * 1000;
+							}
+
+							if(timestamp > queryStart && timestamp <= queryEnd) {
+								Annotation updated = new Annotation(source, id, type, scope, metric, timestamp);
+								updated.setFields(existing.getFields());
+								updated.setTags(query.getTags());
+								annotations.add(updated);
+							}
+						}
+					}
+				}
+				instrumentQueryLatency(_monitorService, query, start, "annotations");
+			}
+		} catch(IOException ex) {
+			throw new SystemException(ex);
+		}
+
+		return annotations;
+	}
 
 	@Override
 	public Properties getServiceProperties() {
