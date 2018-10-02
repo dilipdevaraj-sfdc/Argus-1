@@ -87,11 +87,8 @@ class MetricQueryTransform {
 			}
 			
 			if(query.getPercentile() != null) {
-				// jgen.writeStringField("percentiles", query.getPercentile().substring(11));
 				jgen.writeArrayFieldStart("percentiles");
-				for(String percentile :  query.getPercentile().substring(12,query.getPercentile().length()-1).split(",")) {
-					jgen.writeNumber(Float.parseFloat(percentile));
-				}
+				jgen.writeNumber(query.getPercentile());
 				jgen.writeEndArray();
 			}
 			

@@ -575,50 +575,62 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
   	Aggregator downsampler = null;
   	Long downsamplingPeriod = null;
   	String downsampleTokenStr = null;
-  	String percentile = null;
+  	Long percentile = null;
+  	String aggregatorTokenStr = null;
 }
 { 	
   	startTimestamp = getTime(relativeTo)<COLON>
   	(endTimestamp = getTime(relativeTo)<COLON>)?
   	scope = getString() <COLON> metric = getString()
   	(<LEFT_CURLY> tags = getTags() <RIGHT_CURLY>)?
-  	<COLON>aggregator = getAggregator()
+  	<COLON>aggregatorTokenStr = getString()
   	(LOOKAHEAD(2) <COLON>downsampleTokenStr = getDownsampleToken())?
   	(<COLON>namespace = getString())?
 	{
 	  	if(MetricQuery.class.equals(clazz)) {
+	  	    aggregator = getAggregatorFromToken(aggregatorTokenStr);
 	  	  	downsampler = downsampleTokenStr != null ? getDownsampler(downsampleTokenStr) : null;
 			downsamplingPeriod = downsampleTokenStr != null ? getDownsamplingPeriod(downsampleTokenStr): null;
 			endTimestamp = endTimestamp == null ? relativeTo : endTimestamp;
 	        MetricQuery query = new MetricQuery(scope, metric, tags, startTimestamp, endTimestamp);
+	        /*
 	        if(namespace!=null && namespace.startsWith("percentile")){
 	        	percentile = namespace;
 	        	namespace = "";
 	        }
+	        */
 	        query.setNamespace(namespace);
 	        query.setAggregator(aggregator);
 	        query.setDownsampler(downsampler);
 	        query.setDownsamplingPeriod(downsamplingPeriod);
-            query.setPercentile(percentile);
+	        if(aggregatorTokenStr.contains("-")){
+	        	percentile = getHistogramPercentileFromToken(aggregatorTokenStr);
+	        }
+	        if(percentile != null) {
+	        	query.setPercentile(percentile);
+	        }
+            
 	        List<MetricQuery> queries = discoveryService.getMatchingQueries(query);
 	        return (List<T>) queries;
 	  	} else if(Metric.class.equals(clazz)) {
 			if(syntaxOnly) {
 	            return (List<T>) Arrays.asList( new Metric[] { new Metric("test","metric") });
 	        } else {
+	            aggregator = getAggregatorFromToken(aggregatorTokenStr);
 	          	downsampler = downsampleTokenStr != null ? getDownsampler(downsampleTokenStr) : null;
 				downsamplingPeriod = downsampleTokenStr != null ? getDownsamplingPeriod(downsampleTokenStr): null;
 				endTimestamp = endTimestamp == null ? relativeTo : endTimestamp;
 		        MetricQuery query = new MetricQuery(scope, metric, tags, startTimestamp, endTimestamp);
-		        if(namespace!=null && namespace.startsWith("percentile")){
-                        percentile = namespace;
-                        namespace = "";
-                }
 		        query.setNamespace(namespace);
 		        query.setAggregator(aggregator);
 		        query.setDownsampler(downsampler);
 		        query.setDownsamplingPeriod(downsamplingPeriod);
-		        query.setPercentile(percentile);
+	       		if(aggregatorTokenStr.contains("-")){
+	        		percentile = getHistogramPercentileFromToken(aggregatorTokenStr);
+	        	}
+	        	if(percentile != null) {
+	        		query.setPercentile(percentile);
+	        	}
 		        setQueryTimeWindow(query);
 		        List<MetricQuery> queries = discoveryService.getMatchingQueries(query);
 		        
@@ -717,6 +729,17 @@ private Aggregator getAggregator() :
   	{ return Aggregator.fromString(t.image); }
 }
 
+private String getAggregatorToken() :
+{
+  	Token t = null;
+}
+{
+  	t = <AGGREGATOR>
+  	{ 
+  		return t.image;
+  	}
+}
+
 private String getDownsampleToken() :
 {
   	Token t = null;
@@ -725,6 +748,25 @@ private String getDownsampleToken() :
   	t = <DOWNSAMPLER>
   	{
   	  	return t.image;
+  	}
+}
+
+private Aggregator getAggregatorFromToken(String token) :
+{}
+{
+  	{
+  	 	return Aggregator.fromString(token.split("-")[0]); 
+  	}
+}
+
+private Long getHistogramPercentileFromToken(String token) :
+{}
+{
+  	{   String[] parts = token.split("-");
+  		assert(parts[1].substring(0,1).equals('p')):"Histogram percentile should start with sum-p";
+  	    String percentileDigits = parts[1].substring(1);
+  	    Long percentile = Long.parseLong(percentileDigits);
+		return percentile; 
   	}
 }
 
