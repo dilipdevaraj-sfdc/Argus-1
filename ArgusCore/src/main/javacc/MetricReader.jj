@@ -168,7 +168,6 @@ TOKEN : { < #TAGV : <TSDB_ALLOWED_TEXT> > }
 TOKEN : { < #TAG : <TAGK>"="<TAGV> > }
 TOKEN : { < #DIGIT : ["0"-"9"] > }
 TOKEN : { < #LETTER :  ["a"-"z","A"-"Z"] > }
-TOKEN : { < #HYPHEN : "-" > }
 TOKEN : { < #PERIOD : "." > }
 TOKEN : { < #UNDERSCORE : "_" > }
 TOKEN : { < #FWD_SLASH : "/" > }
@@ -178,10 +177,10 @@ TOKEN : { < #SQUARE_OPEN : "[" > }
 TOKEN : { < #SQUARE_CLOSE : "]" > }
 TOKEN : { < #OR : "|" > }
 TOKEN : { < #DOLLAR : "$" > }
-TOKEN : { < #POUND : "#" > }
 TOKEN : { < #NOT : "!" > }
 TOKEN : { < #TIME_UNIT : "s" | "m" | "h" | "d" > }
 TOKEN : { < #ANYTHING : ~["#"] > }
+TOKEN : { < #PERCENTILE_UNIT : "p" > }
 
 TOKEN : { < IDENTITY : "IDENTITY" > }
 TOKEN : { < SUM : "SUM" > }
@@ -242,6 +241,8 @@ TOKEN : { < GROUPBY : "GROUPBY" > }
 TOKEN : { < GROUPBYTAG : "GROUPBYTAG" > }
 TOKEN : { < INTERPOLATE : "INTERPOLATE" > }
 
+TOKEN : { < HYPHEN : "-" > }
+TOKEN : { < POUND : "#" > }
 TOKEN : { < COLON : ":" > }
 TOKEN : { < COMMA : "," > }
 TOKEN : { < LEFT_CURLY : "{" > }
@@ -252,6 +253,7 @@ TOKEN : { < AGGREGATOR : "avg" | "sum" | "min" | "max" | "dev" | "zimsum" | "mim
 
 TOKEN : { < TIME : (<DIGIT>)+ | <HYPHEN>(<DIGIT>)+<TIME_UNIT> > }
 TOKEN : { < DOWNSAMPLER : (<DIGIT>)+<TIME_UNIT><HYPHEN><AGGREGATOR> > }
+TOKEN : { < HISTOGRAM_PERCENTILE : (<PERCENTILE_UNIT>)(<DIGIT>)+ > }
 
 TOKEN : { < NAMESPACE : <TSDB_ALLOWED_TEXT> > }
 TOKEN : { < SCOPE : <TSDB_ALLOWED_TEXT> > }
@@ -575,7 +577,7 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
   	Aggregator downsampler = null;
   	Long downsamplingPeriod = null;
   	String downsampleTokenStr = null;
-  	Long percentile = null;
+  	String percentile = null;
   	String aggregatorTokenStr = null;
 }
 { 	
@@ -583,29 +585,20 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
   	(endTimestamp = getTime(relativeTo)<COLON>)?
   	scope = getString() <COLON> metric = getString()
   	(<LEFT_CURLY> tags = getTags() <RIGHT_CURLY>)?
-  	<COLON>aggregatorTokenStr = getString()
+  	(<POUND> percentile = getPercentile())?
+  	<COLON>aggregator = getAggregator()
   	(LOOKAHEAD(2) <COLON>downsampleTokenStr = getDownsampleToken())?
   	(<COLON>namespace = getString())?
 	{
 	  	if(MetricQuery.class.equals(clazz)) {
-	  	    aggregator = getAggregatorFromToken(aggregatorTokenStr);
 	  	  	downsampler = downsampleTokenStr != null ? getDownsampler(downsampleTokenStr) : null;
 			downsamplingPeriod = downsampleTokenStr != null ? getDownsamplingPeriod(downsampleTokenStr): null;
 			endTimestamp = endTimestamp == null ? relativeTo : endTimestamp;
 	        MetricQuery query = new MetricQuery(scope, metric, tags, startTimestamp, endTimestamp);
-	        /*
-	        if(namespace!=null && namespace.startsWith("percentile")){
-	        	percentile = namespace;
-	        	namespace = "";
-	        }
-	        */
 	        query.setNamespace(namespace);
 	        query.setAggregator(aggregator);
 	        query.setDownsampler(downsampler);
 	        query.setDownsamplingPeriod(downsamplingPeriod);
-	        if(aggregatorTokenStr.contains("-")){
-	        	percentile = getHistogramPercentileFromToken(aggregatorTokenStr);
-	        }
 	        if(percentile != null) {
 	        	query.setPercentile(percentile);
 	        }
@@ -616,7 +609,6 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
 			if(syntaxOnly) {
 	            return (List<T>) Arrays.asList( new Metric[] { new Metric("test","metric") });
 	        } else {
-	            aggregator = getAggregatorFromToken(aggregatorTokenStr);
 	          	downsampler = downsampleTokenStr != null ? getDownsampler(downsampleTokenStr) : null;
 				downsamplingPeriod = downsampleTokenStr != null ? getDownsamplingPeriod(downsampleTokenStr): null;
 				endTimestamp = endTimestamp == null ? relativeTo : endTimestamp;
@@ -625,9 +617,6 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
 		        query.setAggregator(aggregator);
 		        query.setDownsampler(downsampler);
 		        query.setDownsamplingPeriod(downsamplingPeriod);
-	       		if(aggregatorTokenStr.contains("-")){
-	        		percentile = getHistogramPercentileFromToken(aggregatorTokenStr);
-	        	}
 	        	if(percentile != null) {
 	        		query.setPercentile(percentile);
 	        	}
@@ -727,6 +716,18 @@ private Aggregator getAggregator() :
 {
   	t = <AGGREGATOR>
   	{ return Aggregator.fromString(t.image); }
+}
+
+private String getPercentile() :
+{
+  	Token t = null;
+}
+{
+  	t = <HISTOGRAM_PERCENTILE>
+  	{ 
+  		String percentile = t.image;
+  		return percentile.substring(1);
+  	 }
 }
 
 private String getAggregatorToken() :
