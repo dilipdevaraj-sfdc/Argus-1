@@ -36,6 +36,7 @@ import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import com.salesforce.dva.argus.entity.Annotation;
+import com.salesforce.dva.argus.entity.Histogram;
 import com.salesforce.dva.argus.entity.Metric;
 import com.salesforce.dva.argus.entity.PrincipalUser;
 import com.salesforce.dva.argus.inject.SLF4JTypeListener.InjectLogger;
@@ -64,6 +65,7 @@ import javax.persistence.EntityManager;
 
 import static com.salesforce.dva.argus.service.MQService.MQQueue.ANNOTATION;
 import static com.salesforce.dva.argus.service.MQService.MQQueue.METRIC;
+import static com.salesforce.dva.argus.service.MQService.MQQueue.HISTOGRAM;
 import static com.salesforce.dva.argus.system.SystemAssert.requireArgument;
 
 /**
@@ -242,6 +244,12 @@ public class DefaultCollectionService extends DefaultJPAService implements Colle
         assert (metrics != null) : "List of metrics should not be null.";
         _wardenService.assertSubSystemUsePermitted(submitter, SubSystem.POSTING);
     }
+    
+    private void checkSubmitHistogramPolicyRequirementsMet(PrincipalUser submitter, List<Histogram> histograms) {
+        assert (submitter != null) : "Submitter should not be null.";
+        assert (histograms != null) : "List of annotations should not be null.";
+        _logger.warn("Policy checks for submitting annotations are not yet implmented.");
+    }
 
     /*
      * Parses the metrics, and gets data points size and minimum resolution of data points across all metrics. To get minimum resolution, calculate
@@ -356,5 +364,20 @@ public class DefaultCollectionService extends DefaultJPAService implements Colle
             return minResolutionDataPointsAcrossAllMetrics;
         }
     }
+
+	@Override
+	public void submitHistogram(PrincipalUser submitter, Histogram histogram) {
+		submitHistograms(submitter, Arrays.asList(new Histogram[] { histogram }));
+	}
+
+	@Override
+	public void submitHistograms(PrincipalUser submitter, List<Histogram> histograms) {
+        requireNotDisposed();
+        requireArgument(submitter != null, "Submitting user cannot be null.");
+        requireArgument(histograms != null, "The list of histograms to submit cannot be null.");
+        checkSubmitHistogramPolicyRequirementsMet(submitter, histograms);
+        _monitorService.modifyCounter(Counter.HISTOGRAM_WRITES, histograms.size(), null);
+        _mqService.enqueue(HISTOGRAM.getQueueName(), histograms);
+	}
 }
 /* Copyright (c) 2016, Salesforce.com, Inc.  All rights reserved. */

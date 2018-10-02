@@ -32,6 +32,7 @@
 package com.salesforce.dva.argus.service;
 
 import com.salesforce.dva.argus.entity.Annotation;
+import com.salesforce.dva.argus.entity.Histogram;
 import com.salesforce.dva.argus.entity.Metric;
 import com.salesforce.dva.argus.entity.PrincipalUser;
 import java.util.List;
@@ -118,5 +119,23 @@ public interface CollectionService extends Service {
      * @return  The number of annotations committed.
      */
     int commitAnnotations(int annotationCount, int timeout);
+    
+    /**
+     * Submits a single metric to the collection queue. User based policy checks are enforced prior to the submission of data. If any policy condition
+     * is not met, the method shall throw a runtime exception.
+     *
+     * @param  submitter  The user submitting the data. Cannot be null.
+     * @param  metric     The metric to submit. Cannot be null.
+     */
+    void submitHistogram(PrincipalUser submitter, Histogram histogram);
+
+    /**
+     * Submits metrics to the collection queue. Each message submitted to the queue contains a chunk of metrics. User based policy checks are enforced
+     * prior to the submission of data. If any policy condition is not met, the method shall throw a runtime exception.
+     *
+     * @param  submitter  The user submitting the data. Cannot be null.
+     * @param  metrics    The metrics to submit. Cannot be null.
+     */
+    void submitHistograms(PrincipalUser submitter, List<Histogram> histograms);
 }
 /* Copyright (c) 2016, Salesforce.com, Inc.  All rights reserved. */
