@@ -181,8 +181,10 @@ public class CollectionResources extends AbstractResource {
         for (HistogramDto histogramDto : histogramDtos) {
             try {
             	Histogram histogram = new Histogram(histogramDto.getScope(), histogramDto.getMetric());
-
-                copyProperties(histogram, histogramDto);
+            	histogram.setTags(histogramDto.getTags());
+            	histogram.setTimestamp(histogramDto.getTimestamp());
+            	histogram.setBuckets(histogramDto.getBuckets());
+                // copyProperties(histogram, histogramDto);
                 legalHistograms.add(histogram);
             } catch (Exception e) {
             	illegalHistograms.add(histogramDto);

@@ -32,14 +32,13 @@
 package com.salesforce.dva.argus.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.salesforce.dva.argus.service.tsdb.MetricQuery;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.salesforce.dva.argus.system.SystemAssert;
 
 import java.io.Serializable;
 import java.text.MessageFormat;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.TreeMap;
 
 import static com.salesforce.dva.argus.system.SystemAssert.requireArgument;
@@ -64,7 +63,9 @@ public class Histogram extends TSDBEntity implements Serializable {
 	private String _namespace;
 	private String _displayName;
 	private String _units;
+	@JsonDeserialize(keyUsing = HistogramBucketDeserializer.class)
 	private Map<HistogramBucket, Long> _buckets;
+    private Long _timestamp;
 
 	//~ Constructors *********************************************************************************************************************************
 
@@ -192,10 +193,30 @@ public class Histogram extends TSDBEntity implements Serializable {
 		return _units;
 	}
 	
+
+    /**
+     * Sets the time stamp at which the annotation exists.
+     *
+     * @param  timestamp  THe time stamp for the annotation. Cannot be null.
+     */
+    public void setTimestamp(Long timestamp) {
+        requireArgument(timestamp != null, "Timestamp cannot be null.");
+        _timestamp = timestamp;
+    }
+    
+    /**
+     * Returns the time stamp of the annotation.
+     *
+     * @return  The time stamp of the annotation. Will never be null.
+     */
+    public Long getTimestamp() {
+        return _timestamp;
+    }
+    
 	@Override
 	public String toString() {
-		Object[] params = {getNamespace(), getScope(), getMetric(), getTags(), getBuckets() };
-		String format = "namespace=>{0}, scope=>{1}, metric=>{2}, tags=>{3}, buckets=>{4}";
+		Object[] params = {getTimestamp(), getNamespace(), getScope(), getMetric(), getTags(), getBuckets() };
+		String format = "timestamp=>{0,number,#}, namespace=>{1}, scope=>{2}, metric=>{3}, tags=>{4}, buckets=>{5}";
 
 		return MessageFormat.format(format, params);
 	}

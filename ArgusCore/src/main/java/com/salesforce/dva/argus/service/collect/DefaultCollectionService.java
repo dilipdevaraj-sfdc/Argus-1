@@ -32,13 +32,18 @@
 package com.salesforce.dva.argus.service.collect;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.fasterxml.jackson.databind.type.CollectionType;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
+import com.salesforce.dva.argus.entity.Alert;
 import com.salesforce.dva.argus.entity.Annotation;
 import com.salesforce.dva.argus.entity.Histogram;
+import com.salesforce.dva.argus.entity.HistogramBucket;
 import com.salesforce.dva.argus.entity.Metric;
+import com.salesforce.dva.argus.entity.Notification;
 import com.salesforce.dva.argus.entity.PrincipalUser;
+import com.salesforce.dva.argus.entity.Trigger;
 import com.salesforce.dva.argus.inject.SLF4JTypeListener.InjectLogger;
 import com.salesforce.dva.argus.service.AuditService;
 import com.salesforce.dva.argus.service.CollectionService;
@@ -91,6 +96,7 @@ public class DefaultCollectionService extends DefaultJPAService implements Colle
     private final WardenService _wardenService;
     private final MonitorService _monitorService;
     private final NamespaceService _namespaceService;
+    private final ObjectMapper _mapper = new ObjectMapper();
 
     //~ Constructors *********************************************************************************************************************************
 
@@ -119,7 +125,19 @@ public class DefaultCollectionService extends DefaultJPAService implements Colle
         _wardenService = wardenService;
         _monitorService = monitorService;
         _namespaceService = namespaceService;
+        
+        _initializeObjectMapper();
     }
+    
+	private void _initializeObjectMapper() {
+
+/*		SimpleModule module = new SimpleModule();
+		module.addKeySerializer(HistogramBucket.class, new HistogramBucket.KeySerializer());
+		module.addKeyDeserializer(HistogramBucket.class, new HistogramBucket.KeyDeserializer());
+
+		_mapper.registerModule(module);*/
+	}
+
 
     //~ Methods **************************************************************************************************************************************
 

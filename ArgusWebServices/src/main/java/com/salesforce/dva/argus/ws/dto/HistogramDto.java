@@ -176,6 +176,24 @@ public class HistogramDto extends TSDBEntityDto {
     }
 
     /**
+     * Returns the annotation time stamp.
+     *
+     * @return  The annotation time stamp.
+     */
+    public Long getTimestamp() {
+        return timestamp;
+    }
+
+    /**
+     * Specifies the annotation time stamp.
+     *
+     * @param  timestamp  The annotation time stamp.
+     */
+    public void setTimestamp(Long timestamp) {
+        this.timestamp = timestamp;
+    }
+    
+    /**
      * Returns the metric data points.
      *
      * @return  The metric data points.
