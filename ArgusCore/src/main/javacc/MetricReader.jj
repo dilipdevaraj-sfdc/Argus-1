@@ -253,7 +253,7 @@ TOKEN : { < AGGREGATOR : "avg" | "sum" | "min" | "max" | "dev" | "zimsum" | "mim
 
 TOKEN : { < TIME : (<DIGIT>)+ | <HYPHEN>(<DIGIT>)+<TIME_UNIT> > }
 TOKEN : { < DOWNSAMPLER : (<DIGIT>)+<TIME_UNIT><HYPHEN><AGGREGATOR> > }
-TOKEN : { < HISTOGRAM_PERCENTILE : (<PERCENTILE_UNIT>)(<DIGIT>)+ > }
+TOKEN : { < HISTOGRAM_PERCENTILE : <PERCENTILE_UNIT><SQUARE_OPEN> (<DIGIT>)+(<COMMA>(<DIGIT>)+)* <SQUARE_CLOSE>> }
 
 TOKEN : { < NAMESPACE : <TSDB_ALLOWED_TEXT> > }
 TOKEN : { < SCOPE : <TSDB_ALLOWED_TEXT> > }
@@ -577,7 +577,7 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
   	Aggregator downsampler = null;
   	Long downsamplingPeriod = null;
   	String downsampleTokenStr = null;
-  	String percentile = null;
+  	String[] percentile = null;
   	String aggregatorTokenStr = null;
 }
 { 	
@@ -718,15 +718,17 @@ private Aggregator getAggregator() :
   	{ return Aggregator.fromString(t.image); }
 }
 
-private String getPercentile() :
+private String[] getPercentile() :
 {
   	Token t = null;
 }
 {
   	t = <HISTOGRAM_PERCENTILE>
   	{ 
-  		String percentile = t.image;
-  		return percentile.substring(1);
+  		String percentileToken = t.image;
+  		String percentileStr = percentileToken.substring(2, percentileToken.length() -1);
+  		String[] percentiles = percentileStr.split(",");
+  		return percentiles;
   	 }
 }
 

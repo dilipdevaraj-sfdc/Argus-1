@@ -59,7 +59,7 @@ public class MetricQuery extends AnnotationQuery {
 	private Aggregator _downsampler;
 	private Long _downsamplingPeriod;
 	private MetricQueryContext _metricQueryContext;
-	private String _percentile;
+	private String[] _percentile;
 
 	//~ Constructors *********************************************************************************************************************************
 
@@ -126,7 +126,7 @@ public class MetricQuery extends AnnotationQuery {
 	 *
 	 * @param  percentile  The percentile for histogram data.  May be null.
 	 */
-	public void setPercentile(String percentile) {
+	public void setPercentile(String[] percentile) {
 		_percentile = percentile;
 	}
 	
@@ -162,7 +162,7 @@ public class MetricQuery extends AnnotationQuery {
 	 *
 	 * @return  query percentile.
 	 */
-	public String getPercentile() {
+	public String[] getPercentile() {
 		return _percentile;
 	}
 	
