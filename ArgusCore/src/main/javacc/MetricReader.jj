@@ -243,6 +243,7 @@ TOKEN : { < INTERPOLATE : "INTERPOLATE" > }
 
 TOKEN : { < HYPHEN : "-" > }
 TOKEN : { < POUND : "#" > }
+TOKEN : { < AMPERSAND : "&" > }
 TOKEN : { < COLON : ":" > }
 TOKEN : { < COMMA : "," > }
 TOKEN : { < LEFT_CURLY : "{" > }
@@ -317,7 +318,7 @@ private List<T> function(long relativeTo, boolean syntaxOnly, Class<T> clazz) :
 			totalResult.addAll(result);
 			constantsOnly = false;
 		}
-		| 
+		|
 		t = <CONSTANT>
 			{
 				constant = t.image;
@@ -585,7 +586,7 @@ private List<T> expression(long relativeTo, boolean syntaxOnly, Class<T> clazz) 
   	(endTimestamp = getTime(relativeTo)<COLON>)?
   	scope = getString() <COLON> metric = getString()
   	(<LEFT_CURLY> tags = getTags() <RIGHT_CURLY>)?
-  	(<POUND> percentile = getPercentile())?
+  	(<AMPERSAND> percentile = getPercentile())?
   	<COLON>aggregator = getAggregator()
   	(LOOKAHEAD(2) <COLON>downsampleTokenStr = getDownsampleToken())?
   	(<COLON>namespace = getString())?
