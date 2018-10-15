@@ -180,7 +180,7 @@ TOKEN : { < #DOLLAR : "$" > }
 TOKEN : { < #NOT : "!" > }
 TOKEN : { < #TIME_UNIT : "s" | "m" | "h" | "d" > }
 TOKEN : { < #ANYTHING : ~["#"] > }
-TOKEN : { < #PERCENTILE_UNIT : "p" > }
+TOKEN : { < #PERCENTILE_UNIT : "percentile" > }
 
 TOKEN : { < IDENTITY : "IDENTITY" > }
 TOKEN : { < SUM : "SUM" > }
@@ -726,7 +726,7 @@ private String[] getPercentile() :
   	t = <HISTOGRAM_PERCENTILE>
   	{ 
   		String percentileToken = t.image;
-  		String percentileStr = percentileToken.substring(2, percentileToken.length() -1);
+  		String percentileStr = percentileToken.substring(11, percentileToken.length() -1);
   		String[] percentiles = percentileStr.split(",");
   		return percentiles;
   	 }
